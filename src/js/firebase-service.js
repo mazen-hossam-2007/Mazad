@@ -385,6 +385,13 @@ export class UniversalMultiplayerService {
         this.p2pRoomState.tactics.t2Tactic = msg.tactics.t2Tactic;
         this.broadcastP2PState();
       }
+    } else if (msg.type === "REMATCH_REQUEST") {
+      this.p2pRoomState.rematchRequested = {
+        by: "player2",
+        name: msg.guestName || "Player 2",
+        timestamp: Date.now()
+      };
+      this.broadcastP2PState();
     }
   }
 
@@ -416,25 +423,35 @@ export class UniversalMultiplayerService {
   }
 
   /**
-   * Starts the online auction
+   * Starts the online auction (or starts a rematch)
    */
-  async startOnlineAuction(roomCode, firstCandidate, baseBid) {
+  async startOnlineAuction(roomCode, firstCandidate, baseBid, isRematch = false) {
     const cleanCode = String(roomCode || this.currentRoomCode).toUpperCase();
 
     if (this.mode === "firebase" && this.fbDb) {
       try {
+        const snap = await get(ref(this.fbDb, `mazad_rooms/${cleanCode}/settings/startingBudget`));
+        const budget = snap.val() || 200;
         await update(ref(this.fbDb, `mazad_rooms/${cleanCode}`), {
           status: "auction",
+          rematchRequested: null,
+          matchState: null,
           "gameState/currentRound": 1,
           "gameState/currentAuctionPlayer": firstCandidate,
           "gameState/currentBid": baseBid,
           "gameState/initialBid": baseBid,
           "gameState/highestBidder": null,
           "gameState/currentTurn": "player1",
+          "gameState/p1Passed": false,
+          "gameState/p2Passed": false,
           "gameState/roundPhase": "bidding",
           "gameState/usedPlayerIds": [firstCandidate.id],
           "gameState/bidHistory": [],
-          "gameState/roundResult": null
+          "gameState/roundResult": null,
+          "gameState/player1/budget": budget,
+          "gameState/player1/squad": [],
+          "gameState/player2/budget": budget,
+          "gameState/player2/squad": []
         });
         return { success: true };
       } catch (e) {
@@ -444,18 +461,59 @@ export class UniversalMultiplayerService {
 
     // P2P
     if (this.p2pRoomState) {
+      const budget = (this.p2pRoomState.settings && this.p2pRoomState.settings.startingBudget) || 200;
       this.p2pRoomState.status = "auction";
+      this.p2pRoomState.rematchRequested = null;
+      this.p2pRoomState.matchState = null;
       this.p2pRoomState.gameState.currentRound = 1;
       this.p2pRoomState.gameState.currentAuctionPlayer = firstCandidate;
       this.p2pRoomState.gameState.currentBid = baseBid;
       this.p2pRoomState.gameState.initialBid = baseBid;
       this.p2pRoomState.gameState.highestBidder = null;
       this.p2pRoomState.gameState.currentTurn = "player1";
+      this.p2pRoomState.gameState.p1Passed = false;
+      this.p2pRoomState.gameState.p2Passed = false;
       this.p2pRoomState.gameState.roundPhase = "bidding";
       this.p2pRoomState.gameState.usedPlayerIds = [firstCandidate.id];
       this.p2pRoomState.gameState.bidHistory = [];
       this.p2pRoomState.gameState.roundResult = null;
+      this.p2pRoomState.gameState.player1.budget = budget;
+      this.p2pRoomState.gameState.player1.squad = [];
+      this.p2pRoomState.gameState.player2.budget = budget;
+      this.p2pRoomState.gameState.player2.squad = [];
       this.broadcastP2PState();
+    }
+    return { success: true };
+  }
+
+  /**
+   * Guest requests a rematch from the Host
+   */
+  async requestOnlineRematch(roomCode, guestName) {
+    const cleanCode = String(roomCode || this.currentRoomCode).toUpperCase();
+
+    if (this.mode === "firebase" && this.fbDb) {
+      try {
+        await update(ref(this.fbDb, `mazad_rooms/${cleanCode}`), {
+          rematchRequested: {
+            by: "player2",
+            name: guestName || "Player 2",
+            timestamp: Date.now()
+          }
+        });
+        return { success: true };
+      } catch (e) {
+        console.error("Firebase requestOnlineRematch failed:", e);
+      }
+    }
+
+    if (this.role === "player2") {
+      if (this.peerConn && this.peerConn.open) {
+        this.peerConn.send({
+          type: "REMATCH_REQUEST",
+          guestName: guestName || "Player 2"
+        });
+      }
     }
     return { success: true };
   }

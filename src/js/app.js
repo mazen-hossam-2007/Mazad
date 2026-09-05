@@ -907,6 +907,19 @@ export class MazadGame {
     else if (status === "match") {
       this.handleOnlineMatchSync(roomData);
     }
+
+    // Check Rematch requests if currently on Winner Screen
+    const winnerScreen = document.getElementById("winnerScreen");
+    if (winnerScreen && winnerScreen.classList.contains("active")) {
+      const playAgainBtn = document.getElementById("playAgainBtn");
+      if (roomData.rematchRequested && this.state.online.role === "player1" && playAgainBtn) {
+        const requesterName = roomData.rematchRequested.name || "Opponent";
+        playAgainBtn.innerHTML = `⚡ ${requesterName.toUpperCase()} WANTS REMATCH! ACCEPT ⚽`;
+        playAgainBtn.style.animation = "pulse 1.2s infinite";
+        playAgainBtn.disabled = false;
+        playAgainBtn.style.opacity = "1";
+      }
+    }
   }
 
   handleOnlineAuctionSync(roomData) {
@@ -917,6 +930,13 @@ export class MazadGame {
     if (this.state.screen !== "auction") {
       this.state.screen = "auction";
       this.showScreen("auctionScreen");
+      // Close any previous open modals (like winner screen modals, inspect, etc.)
+      document.querySelectorAll(".modal").forEach(m => m.classList.remove("active"));
+    }
+
+    // Clear match simulation state if new match / round 1
+    if (gameState.currentRound === 1 && gameState.roundPhase === "bidding") {
+      this.state.matchSim = null;
     }
 
     // Sync budgets & squads
@@ -2556,15 +2576,79 @@ export class MazadGame {
     // Attach actions
     const playAgainBtn = document.getElementById("playAgainBtn");
     if (playAgainBtn) {
-      playAgainBtn.onclick = () => this.startGame();
+      playAgainBtn.disabled = false;
+      playAgainBtn.style.opacity = "1";
+      playAgainBtn.style.animation = "none";
+
+      if (this.state.mode === "online" && this.state.online.isOnline) {
+        if (this.state.online.role === "player1") {
+          playAgainBtn.innerHTML = "PLAY AGAIN (REMATCH) ⚡";
+          playAgainBtn.onclick = () => this.handleOnlineRematchFromHost();
+        } else {
+          playAgainBtn.innerHTML = "REQUEST REMATCH ⚡";
+          playAgainBtn.onclick = () => this.handleOnlineRematchRequestFromGuest();
+        }
+      } else {
+        playAgainBtn.innerHTML = "PLAY AGAIN 🔄";
+        playAgainBtn.onclick = () => this.startGame();
+      }
     }
 
     const newAuctionBtn = document.getElementById("newAuctionBtn");
     if (newAuctionBtn) {
-      newAuctionBtn.onclick = () => {
-        this.showScreen("startScreen");
-      };
+      if (this.state.mode === "online" && this.state.online.isOnline) {
+        newAuctionBtn.innerHTML = "LEAVE MATCH ROOM 🚪";
+        newAuctionBtn.onclick = () => {
+          firebaseMultiplayer.leaveRoom(this.state.online.roomCode);
+          this.leaveOnlineRoom();
+          this.showScreen("startScreen");
+        };
+      } else {
+        newAuctionBtn.innerHTML = "MAIN MENU 🏠";
+        newAuctionBtn.onclick = () => {
+          this.showScreen("startScreen");
+        };
+      }
     }
+  }
+
+  async handleOnlineRematchFromHost() {
+    if (!this.state.online.isOnline || this.state.online.role !== "player1") return;
+    const roomCode = this.state.online.roomCode;
+    if (!roomCode) return;
+
+    sound.init();
+    sound.playWhistle();
+
+    // Reset local state for fresh match
+    this.state.usedPlayerIds = [];
+    this.state.currentRound = 1;
+    this.state.player1.squad = [];
+    this.state.player2.squad = [];
+    this.state.player1.budget = this.state.startingBudget;
+    this.state.player2.budget = this.state.startingBudget;
+    this.state.online.lastProcessedPhase = null;
+    this.state.matchSim = null;
+
+    const slot = this.getCurrentSlotInfo();
+    const candidate = getAuctionCandidate(slot.position, this.state.selectedLeague, []);
+    this.state.currentAuctionPlayer = candidate;
+    this.state.usedPlayerIds = [candidate.id];
+
+    const baseBid = Math.max(5, Math.round(candidate.value * 0.25));
+
+    await firebaseMultiplayer.startOnlineAuction(roomCode, candidate, baseBid, true);
+  }
+
+  async handleOnlineRematchRequestFromGuest() {
+    sound.playClick();
+    const playAgainBtn = document.getElementById("playAgainBtn");
+    if (playAgainBtn) {
+      playAgainBtn.disabled = true;
+      playAgainBtn.innerHTML = "⏳ WAITING FOR HOST TO START...";
+      playAgainBtn.style.opacity = "0.7";
+    }
+    await firebaseMultiplayer.requestOnlineRematch(this.state.online.roomCode, this.state.player2.name);
   }
 
   inspectPlayer(player) {
