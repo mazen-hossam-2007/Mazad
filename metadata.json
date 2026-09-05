@@ -1,0 +1,6 @@
+{
+  "name": "Mazad Hossam",
+  "description": "A competitive two-player football auction game to bid, build your dream starting XI, and battle on match day.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

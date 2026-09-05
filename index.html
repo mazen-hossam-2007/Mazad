@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mazad Hossam — Football Auction Game</title>
+    <meta name="description" content="A competitive two-player football auction game to bid, build your dream starting XI, and battle on match day." />
+    <meta property="og:title" content="Mazad Hossam — Football Auction Game" />
+    <meta property="og:description" content="A competitive two-player football auction game to bid, build your dream starting XI, and battle on match day." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- Top Header -->
+    <header class="app-header" id="appHeader">
+      <div class="brand-area" id="headerBrand" onclick="location.reload()">
+        <div class="brand-logo" id="brandLogoIcon">⚽</div>
+        <div class="brand-text" id="brandText">
+          <span class="brand-eyebrow">THE ULTIMATE AUCTION</span>
+          <h1>MAZAD HOSSAM<span class="brand-dot">.</span></h1>
+        </div>
+      </div>
+      <div class="header-controls" id="headerControls">
+        <button class="header-btn" id="headerRulesBtn" title="How to Play Mazad Hossam">
+          📖 Rules
+        </button>
+        <button class="header-btn header-exit-btn" id="headerExitBtn" title="Exit to Main Menu">
+          🚪 Exit Game
+        </button>
+        <button class="header-btn" id="headerSettingsBtn" title="Game Settings">
+          ⚙️ Settings
+        </button>
+        <button class="header-btn sound-on" id="soundToggle" title="Toggle Game Audio">
+          🔊 Sound ON
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main id="appMain">
+
+      <!-- ================= 1. START SCREEN ================= -->
+      <section class="screen active" id="startScreen">
+        <div class="start-container" id="startContainer">
+          
+          <div class="hero-box" id="heroBox">
+            <div class="hero-badge" id="heroBadge">🏆 THE ULTIMATE FOOTBALL AUCTION</div>
+            <h2 class="hero-title" id="heroTitle">
+              MAZAD HOSSAM<br>
+              <span class="highlight">BID. BUILD. BATTLE.</span>
+            </h2>
+            <p class="hero-subtitle" id="heroSubtitle">
+              A high-stakes tactical football auction between two managers. Bid in turns, build a world-class starting XI, survive the Lucky Draw, and battle on Match Day.
+            </p>
+
+            <!-- Quick Action Buttons -->
+            <div class="menu-action-buttons" id="mainMenuButtons">
+              <button class="menu-btn primary-menu-btn" id="quickMatchBtn">
+                ⚡ QUICK MATCH
+                <span class="menu-btn-sub">€200M • 4-3-3 • All Leagues</span>
+              </button>
+              <button class="menu-btn secondary-menu-btn" id="customGameBtn">
+                ⚙️ CUSTOM GAME
+                <span class="menu-btn-sub">Configure budgets, leagues & AI</span>
+              </button>
+              <button class="menu-btn tertiary-menu-btn" id="howToPlayMenuBtn">
+                📖 HOW TO PLAY
+                <span class="menu-btn-sub">Turn rules, Lucky Draw & Match Day</span>
+              </button>
+              <button class="menu-btn tertiary-menu-btn" id="settingsMenuBtn">
+                🛠️ SETTINGS
+                <span class="menu-btn-sub">Sound, Match speed & preferences</span>
+              </button>
+            </div>
+
+            <div class="hero-features" id="heroFeatures">
+              <div class="feature-pill" id="featPill1">
+                <h4>Turn-Based Bidding</h4>
+                <p>One competitor acts at a time with realistic thinking delays.</p>
+              </div>
+              <div class="feature-pill" id="featPill2">
+                <h4>Lucky Draw Rule</h4>
+                <p>The auction loser gets a surprise free player of the exact same position.</p>
+              </div>
+              <div class="feature-pill" id="featPill3">
+                <h4>Live Match Engine</h4>
+                <p>90' simulation with sector strengths (ATT, MID, DEF, GK) & chemistry.</p>
+              </div>
+              <div class="feature-pill" id="featPill4">
+                <h4>500+ Star Players</h4>
+                <p>Top leagues: Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Saudi, MLS & Egyptian League.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Configuration Panel (Custom Game Drawer) -->
+          <div class="config-card" id="configCard">
+            <div class="config-header-row">
+              <h3 class="config-title">⚙️ MATCH CONFIGURATION</h3>
+              <span class="config-subtitle">Customize rules, budgets and teams</span>
+            </div>
+            
+            <!-- Game Mode -->
+            <div class="config-group" id="groupGameMode">
+              <label class="config-label">Game Mode</label>
+              <div class="mode-selector" id="modeSelector">
+                <button class="selector-chip mode-chip active" id="modePvpChip" data-mode="pvp">
+                  👥 Local 2 Player
+                </button>
+                <button class="selector-chip mode-chip" id="modeAiChip" data-mode="ai">
+                  🤖 VS Computer AI
+                </button>
+              </div>
+            </div>
+
+            <!-- AI Difficulty (Visible only in VS AI) -->
+            <div class="config-group" id="aiOptionsGroup" style="display: none;">
+              <label class="config-label">AI Difficulty</label>
+              <div class="mode-selector" id="aiDifficultySelector">
+                <button class="selector-chip ai-diff-chip" data-difficulty="easy">Easy</button>
+                <button class="selector-chip ai-diff-chip active" data-difficulty="normal">Normal (Balanced)</button>
+                <button class="selector-chip ai-diff-chip" data-difficulty="hard">Hard</button>
+                <button class="selector-chip ai-diff-chip" data-difficulty="expert">Expert 🔥</button>
+              </div>
+            </div>
+
+            <!-- Player Pool / League Selection -->
+            <div class="config-group" id="groupLeaguePool">
+              <label class="config-label">Player Pool (League Selection)</label>
+              <div class="league-selector-grid" id="leagueSelectorGrid">
+                <button class="selector-chip league-chip active" data-league="ALL LEAGUES">🌍 ALL LEAGUES (World & European Stars)</button>
+                <button class="selector-chip league-chip" data-league="Premier League">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League</button>
+                <button class="selector-chip league-chip" data-league="La Liga">🇪🇸 La Liga</button>
+                <button class="selector-chip league-chip" data-league="Serie A">🇮🇹 Serie A</button>
+                <button class="selector-chip league-chip" data-league="Bundesliga">🇩🇪 Bundesliga</button>
+                <button class="selector-chip league-chip" data-league="Ligue 1">🇫🇷 Ligue 1</button>
+                <button class="selector-chip league-chip" data-league="Saudi Pro League">🇸🇦 Saudi Pro League</button>
+                <button class="selector-chip league-chip" data-league="MLS">🇺🇸 Major League Soccer</button>
+                <button class="selector-chip league-chip" data-league="Egyptian Premier League & Cup">🇪🇬 Egyptian League & Cup (200+ Players)</button>
+              </div>
+            </div>
+
+            <!-- Player Names -->
+            <div class="config-group" id="groupPlayerNames">
+              <label class="config-label">Player Names</label>
+              <div class="player-names-grid" id="playerNamesGrid">
+                <div>
+                  <input type="text" id="p1NameInput" class="input-box" value="Player 1" placeholder="Player 1 Name" maxlength="16" />
+                </div>
+                <div>
+                  <input type="text" id="p2NameInput" class="input-box" value="Player 2" placeholder="Player 2 Name" maxlength="16" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Starting Budget -->
+            <div class="config-group" id="groupBudget">
+              <label class="config-label">Starting Budget Per Player</label>
+              <div class="budget-presets" id="budgetPresets">
+                <button class="selector-chip budget-chip" data-budget="50">€50M</button>
+                <button class="selector-chip budget-chip" data-budget="100">€100M</button>
+                <button class="selector-chip budget-chip" data-budget="150">€150M</button>
+                <button class="selector-chip budget-chip active" data-budget="200">€200M</button>
+                <button class="selector-chip budget-chip" data-budget="300">€300M</button>
+                <button class="selector-chip budget-chip" data-budget="500">€500M</button>
+                <button class="selector-chip budget-chip" data-budget="custom">Custom</button>
+              </div>
+              <div id="customBudgetWrap" style="display: none; margin-top: 0.6rem;">
+                <input type="number" id="customBudgetInput" class="input-box" placeholder="Enter budget in millions (e.g. 250)" min="30" max="1000" />
+              </div>
+            </div>
+
+            <!-- Formation -->
+            <div class="config-group" id="groupFormation">
+              <label class="config-label">Pitch Formation</label>
+              <div class="formation-presets" id="formationPresets">
+                <button class="selector-chip formation-chip active" data-formation="4-3-3">4-3-3</button>
+                <button class="selector-chip formation-chip" data-formation="4-4-2">4-4-2</button>
+                <button class="selector-chip formation-chip" data-formation="4-2-3-1">4-2-3-1</button>
+                <button class="selector-chip formation-chip" data-formation="3-5-2">3-5-2</button>
+                <button class="selector-chip formation-chip" data-formation="4-3-2-1">4-3-2-1</button>
+              </div>
+            </div>
+
+            <!-- Timer Settings -->
+            <div class="config-group" id="groupTimer">
+              <label class="config-label">Auction Countdown Timer</label>
+              <div class="mode-selector" id="timerPresets">
+                <button class="selector-chip timer-chip" data-timer="5">5 Seconds</button>
+                <button class="selector-chip timer-chip active" data-timer="10">10 Seconds</button>
+                <button class="selector-chip timer-chip" data-timer="15">15 Seconds</button>
+                <button class="selector-chip timer-chip" data-timer="30">30 Seconds</button>
+                <button class="selector-chip timer-chip" data-timer="0">Timer OFF</button>
+              </div>
+            </div>
+
+            <!-- Start Game CTA -->
+            <button class="start-btn" id="startAuctionBtn">
+              START AUCTION ⚡
+            </button>
+
+          </div>
+
+        </div>
+      </section>
+
+
+      <!-- ================= 2. AUCTION SCREEN ================= -->
+      <section class="screen" id="auctionScreen">
+        <div class="auction-layout" id="auctionLayout">
+
+          <!-- Left Team Panel (Player 1) -->
+          <aside class="team-panel" id="p1TeamPanel">
+            <div class="team-header" id="p1TeamHeader">
+              <div class="team-badge">
+                <div class="team-avatar p1-avatar" id="p1AvatarIcon">1</div>
+                <div class="team-info">
+                  <h3 id="p1NameLabel">Player 1</h3>
+                  <span class="team-role">Challenger</span>
+                </div>
+              </div>
+              <div class="team-meta-row">
+                <span id="player1CountVal">0/11</span>
+              </div>
+            </div>
+
+            <div class="budget-display p1-budget" id="p1BudgetBox">
+              <span class="label">REMAINING BUDGET</span>
+              <span class="val" id="player1BudgetVal">€200M</span>
+            </div>
+
+            <div class="team-progress-bar-wrap" id="p1ProgressWrap">
+              <div class="team-progress-bar-fill p1-bar" id="p1ProgressBar" style="width: 0%;"></div>
+            </div>
+
+            <div class="team-meta-row">
+              <span>Squad Rating</span>
+              <strong id="player1OvrVal">-- OVR</strong>
+            </div>
+
+            <!-- Interactive Football Pitch (Player 1) -->
+            <div class="team-pitch-wrap" id="player1PitchWrap">
+              <div class="pitch-stripes"></div>
+              <div class="pitch-lines"></div>
+              <div class="pitch-halfway"></div>
+              <div class="pitch-circle"></div>
+              <div class="pitch-box-bottom"></div>
+              <div class="pitch-box-top"></div>
+              <div id="player1PitchContainer"></div>
+            </div>
+          </aside>
+
+          <!-- Center Auction Arena -->
+          <div class="auction-center" id="auctionCenterArena">
+
+            <!-- Round Banner & Countdown -->
+            <div class="round-banner" id="auctionRoundBanner">
+              <div class="round-stat-col">
+                <div class="round-stat-label">CURRENT ROUND</div>
+                <div class="round-stat-val round-green-val" id="roundNumberDisplay">1 <span class="round-dim">/ 11</span></div>
+              </div>
+              <div class="round-stat-col">
+                <div class="round-stat-label">POSITION</div>
+                <div class="round-stat-val" id="roundTitleDisplay">GOALKEEPER</div>
+              </div>
+              <div class="round-stat-col timer-pill" id="auctionTimerPill">
+                <div class="round-stat-label">TIME LEFT</div>
+                <div class="round-stat-val round-timer-val" id="timerValDisplay">00:10</div>
+              </div>
+              <div class="round-stat-col">
+                <button class="arena-exit-btn" id="arenaExitBtn" title="Exit to Main Menu">
+                  🚪 Exit Game
+                </button>
+              </div>
+            </div>
+
+            <!-- Error message if insufficient funds -->
+            <div id="bidErrorMessage" style="display: none; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 0.6rem; border-radius: 8px; text-align: center; font-weight: 800; font-size: 0.85rem;">
+              ⚠️ INSUFFICIENT BUDGET!
+            </div>
+
+            <!-- Player On Auction Card -->
+            <div class="auction-card-wrapper" id="auctionCardWrapper">
+              <!-- Dynamically populated card -->
+            </div>
+
+            <!-- Live Bidding Box -->
+            <div class="bidding-box" id="biddingBox">
+              
+              <!-- Current Bid Display -->
+              <div class="current-bid-display" id="currentBidContainer">
+                <div class="turn-badge p1-turn" id="turnBadge">🔥 PLAYER 1'S TURN</div>
+                <div class="bid-title">CURRENT HIGHEST BID</div>
+                <div class="bid-amount" id="currentBidDisplay">€20M</div>
+                <div class="bid-holder-pill holder-none" id="bidHolderPill">No bids yet</div>
+              </div>
+
+              <!-- Two Players Bid Columns -->
+              <div class="bid-controls-container" id="bidControlsContainer">
+                
+                <!-- Player 1 Controls -->
+                <div class="player-bid-column p1-col" id="p1BidControls">
+                  <!-- Generated dynamically -->
+                </div>
+
+                <!-- Player 2 Controls -->
+                <div class="player-bid-column p2-col" id="p2BidControls">
+                  <!-- Generated dynamically -->
+                </div>
+
+              </div>
+
+              <!-- Bid History Feed -->
+              <div class="bid-history-feed" id="bidHistoryFeed">
+                <!-- Log feed -->
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- Right Team Panel (Player 2 / AI) -->
+          <aside class="team-panel" id="p2TeamPanel">
+            <div class="team-header" id="p2TeamHeader">
+              <div class="team-badge">
+                <div class="team-avatar p2-avatar" id="p2AvatarIcon">2</div>
+                <div class="team-info">
+                  <h3 id="p2NameLabel">Player 2</h3>
+                  <span class="team-role">Challenger</span>
+                </div>
+              </div>
+              <div class="team-meta-row">
+                <span id="player2CountVal">0/11</span>
+              </div>
+            </div>
+
+            <div class="budget-display p2-budget" id="p2BudgetBox">
+              <span class="label">REMAINING BUDGET</span>
+              <span class="val" id="player2BudgetVal">€200M</span>
+            </div>
+
+            <div class="team-progress-bar-wrap" id="p2ProgressWrap">
+              <div class="team-progress-bar-fill p2-bar" id="p2ProgressBar" style="width: 0%;"></div>
+            </div>
+
+            <div class="team-meta-row">
+              <span>Squad Rating</span>
+              <strong id="player2OvrVal">-- OVR</strong>
+            </div>
+
+            <!-- Interactive Football Pitch (Player 2) -->
+            <div class="team-pitch-wrap" id="player2PitchWrap">
+              <div class="pitch-stripes"></div>
+              <div class="pitch-lines"></div>
+              <div class="pitch-halfway"></div>
+              <div class="pitch-circle"></div>
+              <div class="pitch-box-bottom"></div>
+              <div class="pitch-box-top"></div>
+              <div id="player2PitchContainer"></div>
+            </div>
+          </aside>
+
+        </div>
+      </section>
+
+
+      <!-- ================= 3. SQUADS COMPLETE REVIEW ================= -->
+      <section class="screen" id="squadReviewScreen">
+        <div class="squad-review-container" id="squadReviewContainer">
+          
+          <div class="review-header">
+            <h2>SQUADS COMPLETE</h2>
+            <p>Both starting XIs are assembled. Compare team sectors and chemistry before kicking off match day.</p>
+          </div>
+
+          <div class="comparison-grid" id="squadComparisonGrid">
+            
+            <!-- Player 1 Card -->
+            <div class="comparison-card p1-card" id="reviewT1Card">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="font-size:1.4rem; font-weight:900;" id="reviewT1Name">PLAYER 1 FC</h3>
+                <span style="font-size:2rem; font-weight:900; color:var(--p1-color);" id="reviewT1Ovr">88</span>
+              </div>
+              <div class="stat-bars-list" id="t1StatBarsList"></div>
+              <div class="pre-match-tactic-box">
+                <span class="pre-match-tactic-title" id="reviewT1TacticTitle">🟢 Starting Tactics:</span>
+                <div class="tactic-chips-row" id="reviewT1TacticRow">
+                  <button class="tactic-chip p1-review-chip" data-team="1" data-tactic="COUNTER" title="Counter-Attack">🛡️ Counter</button>
+                  <button class="tactic-chip p1-review-chip active" data-team="1" data-tactic="BALANCED" title="Balanced">⚖️ Balanced</button>
+                  <button class="tactic-chip p1-review-chip" data-team="1" data-tactic="ATTACK" title="All-Out Attack">⚔️ Attack</button>
+                  <button class="tactic-chip p1-review-chip" data-team="1" data-tactic="PRESS" title="High Press">🔥 Press</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Player 2 Card -->
+            <div class="comparison-card p2-card" id="reviewT2Card">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="font-size:1.4rem; font-weight:900;" id="reviewT2Name">PLAYER 2 FC</h3>
+                <span style="font-size:2rem; font-weight:900; color:var(--p2-color);" id="reviewT2Ovr">87</span>
+              </div>
+              <div class="stat-bars-list" id="t2StatBarsList"></div>
+              <div class="pre-match-tactic-box">
+                <span class="pre-match-tactic-title" id="reviewT2TacticTitle">🔵 Starting Tactics:</span>
+                <div class="tactic-chips-row" id="reviewT2TacticRow">
+                  <button class="tactic-chip p2-review-chip" data-team="2" data-tactic="COUNTER" title="Counter-Attack">🛡️ Counter</button>
+                  <button class="tactic-chip p2-review-chip active" data-team="2" data-tactic="BALANCED" title="Balanced">⚖️ Balanced</button>
+                  <button class="tactic-chip p2-review-chip" data-team="2" data-tactic="ATTACK" title="All-Out Attack">⚔️ Attack</button>
+                  <button class="tactic-chip p2-review-chip" data-team="2" data-tactic="PRESS" title="High Press">🔥 Press</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="review-actions">
+            <button class="proceed-match-btn" id="proceedToMatchBtn">
+              ⚔️ PROCEED TO MATCH DAY
+            </button>
+            <button class="header-btn header-exit-btn" id="reviewExitBtn" title="Exit to Main Menu">
+              🚪 Exit Game
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+
+      <!-- ================= 4. MATCH DAY SIMULATION ================= -->
+      <section class="screen" id="matchDayScreen">
+        <div class="matchday-container" id="matchDayContainer">
+
+          <!-- Broadcast Style Scoreboard -->
+          <div class="broadcast-scoreboard" id="broadcastScoreboard">
+            
+            <div class="match-team team-left" id="matchTeam1Block">
+              <div class="team-avatar p1-avatar">1</div>
+              <div>
+                <div class="match-team-name" id="matchT1Name">Player 1 FC</div>
+                <div class="match-team-ovr" id="matchT1Ovr">88 OVR</div>
+                <div class="team-tactic-badge" id="matchT1TacticBadge">⚖️ Balanced</div>
+              </div>
+            </div>
+
+            <div class="center-score-hub" id="centerScoreHub">
+              <div class="live-clock-badge" id="matchClockDisplay">1'</div>
+              <div class="scoreboard-numbers" id="matchScoreboardNumber">0 - 0</div>
+              <div class="live-xg-display" id="matchLiveXG">xG: 0.00 - 0.00</div>
+              
+              <div class="sim-speed-controls" id="simSpeedControls">
+                <button class="speed-chip active" data-speed="1">1x</button>
+                <button class="speed-chip" data-speed="2">2x</button>
+                <button class="speed-chip" data-speed="5">5x</button>
+                <button class="speed-chip" data-speed="0">Instant</button>
+              </div>
+            </div>
+
+            <div class="match-team team-right" id="matchTeam2Block">
+              <div class="team-avatar p2-avatar">2</div>
+              <div>
+                <div class="match-team-name" id="matchT2Name">Player 2 FC</div>
+                <div class="match-team-ovr" id="matchT2Ovr">87 OVR</div>
+                <div class="team-tactic-badge" id="matchT2TacticBadge">⚖️ Balanced</div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Dynamic Pitch Momentum & Tactical Bar with Dual Team Controls -->
+          <div class="match-control-strip" id="matchControlStrip">
+            <div class="tactics-dual-grid" id="tacticsDualGrid">
+              
+              <!-- Player 1 Tactics Box -->
+              <div class="tactical-selector-box p1-tactics" id="p1TacticsBox">
+                <div class="tactical-header-row">
+                  <span class="tactic-title p1-tactic-title" id="p1TacticTitle">🟢 PLAYER 1 TACTICS:</span>
+                  <span class="active-tactic-name" id="p1ActiveTacticLabel">⚖️ Balanced</span>
+                </div>
+                <div class="tactic-chips-row" id="p1TacticChipsRow">
+                  <button class="tactic-chip p1-chip" data-team="1" data-tactic="COUNTER" title="Deep defensive block & fast counters">🛡️ Counter</button>
+                  <button class="tactic-chip p1-chip active" data-team="1" data-tactic="BALANCED" title="Controlled formation & tempo">⚖️ Balanced</button>
+                  <button class="tactic-chip p1-chip" data-team="1" data-tactic="ATTACK" title="Push forward & maximize shooting">⚔️ Attack</button>
+                  <button class="tactic-chip p1-chip" data-team="1" data-tactic="PRESS" title="Suffocating high press & turnover traps">🔥 Press</button>
+                </div>
+              </div>
+
+              <!-- Player 2 Tactics Box -->
+              <div class="tactical-selector-box p2-tactics" id="p2TacticsBox">
+                <div class="tactical-header-row">
+                  <span class="tactic-title p2-tactic-title" id="p2TacticTitle">🔵 PLAYER 2 TACTICS:</span>
+                  <span class="active-tactic-name" id="p2ActiveTacticLabel">⚖️ Balanced</span>
+                </div>
+                <div class="tactic-chips-row" id="p2TacticChipsRow">
+                  <button class="tactic-chip p2-chip" data-team="2" data-tactic="COUNTER" title="Deep defensive block & fast counters">🛡️ Counter</button>
+                  <button class="tactic-chip p2-chip active" data-team="2" data-tactic="BALANCED" title="Controlled formation & tempo">⚖️ Balanced</button>
+                  <button class="tactic-chip p2-chip" data-team="2" data-tactic="ATTACK" title="Push forward & maximize shooting">⚔️ Attack</button>
+                  <button class="tactic-chip p2-chip" data-team="2" data-tactic="PRESS" title="Suffocating high press & turnover traps">🔥 Press</button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Pitch Momentum Tracker -->
+            <div class="pitch-momentum-box">
+              <div class="momentum-header">
+                <span id="momentumLabelP1">🟢 P1 Attack</span>
+                <span class="pitch-zone-indicator" id="pitchZoneIndicator">🏟️ Ball in Midfield</span>
+                <span id="momentumLabelP2">🔵 P2 Attack</span>
+              </div>
+              <div class="momentum-bar-track">
+                <div class="momentum-bar-pointer" id="momentumBarPointer" style="left: 50%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Penalty Shootout Dramatic Banner (hidden by default) -->
+          <div class="shootout-banner" id="shootoutBanner" style="display: none;">
+            <div class="shootout-title">🎯 SUPER CUP PENALTY SHOOTOUT</div>
+            <div class="shootout-teams-duel">
+              <div class="shootout-team-side">
+                <strong id="shootoutP1Name">Player 1</strong>
+                <div class="penalty-dots-row" id="shootoutP1Dots"></div>
+              </div>
+              <div class="shootout-score-center" id="shootoutScoreDisplay">0 - 0</div>
+              <div class="shootout-team-side">
+                <strong id="shootoutP2Name">Player 2</strong>
+                <div class="penalty-dots-row" id="shootoutP2Dots"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Body: Live Commentary & Live Stats -->
+          <div class="match-body-grid" id="matchBodyGrid">
+            
+            <!-- Live Commentary Panel -->
+            <div class="commentary-card" id="commentaryCard">
+              <div class="commentary-title">🎙️ LIVE MATCH COMMENTARY</div>
+              <div class="commentary-scroll" id="commentaryFeedScroll">
+                <!-- Live items appended here -->
+              </div>
+            </div>
+
+            <!-- Match Stats Panel -->
+            <div class="match-stats-card" id="matchStatsCard">
+              <div class="commentary-title">📊 MATCH DAY STATS</div>
+              <div id="matchStatsListContainer" style="display:flex; flex-direction:column; gap:0.9rem;">
+                <!-- Filled dynamically -->
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+
+      <!-- ================= 5. WINNER CELEBRATION SCREEN ================= -->
+      <section class="screen" id="winnerScreen">
+        <div class="winner-container" id="winnerContainer">
+          
+          <div class="trophy-badge" id="trophyBadge">🏆</div>
+          <h2 class="winner-headline" id="winnerHeadlineDisplay">PLAYER 1 WINS!</h2>
+          <p style="color:var(--text-secondary); font-size:1.1rem; margin-top:-0.5rem;" id="winnerSublineDisplay">
+            Mazad Champion • Victory in the Super Cup
+          </p>
+
+          <!-- MVP Spotlight -->
+          <div class="mvp-spotlight-card" id="winnerMVPContainer">
+            <!-- Dynamically populated MVP -->
+          </div>
+
+          <div class="winner-actions">
+            <button class="proceed-match-btn" id="playAgainBtn">
+              🔄 PLAY AGAIN (Same Settings)
+            </button>
+            <button class="header-btn" id="newAuctionBtn" style="padding: 1rem 1.8rem; font-size: 1.05rem; font-weight:700;">
+              🏠 NEW AUCTION (Main Menu)
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+
+    <!-- ================= MODAL: LUCKY DRAW & ROUND WINNER ================= -->
+    <div class="modal-overlay" id="luckyDrawModal">
+      <div class="reveal-modal" id="revealModalCard" title="Tap anywhere to advance immediately">
+        <h3 class="reveal-title" id="revealTitle">ROUND RESOLUTION</h3>
+        <div class="winner-summary-pill" id="winnerSummaryPill">
+          Player 1 won Haaland for €80M!
+        </div>
+
+        <div class="lucky-draw-box" id="luckyDrawBox">
+          <div id="luckyRouletteArea">
+            <div class="lucky-badge">🎁 LOSER'S RANDOM FREE REWARD</div>
+            <div class="roulette-spin">🎲 Drawing random player...</div>
+          </div>
+        </div>
+
+        <div class="auto-continue-strip" id="autoContinueStrip">
+          <div class="auto-continue-bar-wrap">
+            <div class="auto-continue-bar-fill" id="autoContinueBar"></div>
+          </div>
+          <div class="auto-continue-text" id="autoContinueText">
+            <span class="auto-pulse-dot"></span> Continuing automatically... <span class="tap-hint">(tap anywhere to skip)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ================= MODAL: PLAYER INSPECTOR ================= -->
+    <div class="modal-overlay" id="playerInspectModal">
+      <div class="inspect-modal-card" id="playerInspectCard">
+        <button class="close-modal-btn" id="closeInspectBtn">×</button>
+        <div id="playerInspectBody">
+          <!-- Filled dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: HOW TO PLAY ================= -->
+    <div class="modal-overlay" id="howToPlayModal">
+      <div class="info-modal-card" id="howToPlayCard">
+        <button class="close-modal-btn" id="closeHowToPlayBtn">×</button>
+        <div class="modal-header-badge">📖 OFFICIAL MAZAD HOSSAM RULEBOOK</div>
+        <h2 class="modal-title">HOW TO PLAY MAZAD HOSSAM</h2>
+        
+        <div class="rules-scroll-content">
+          <div class="rule-block">
+            <div class="rule-icon">👥</div>
+            <div class="rule-text">
+              <h3>1. The Setup & Starting XI</h3>
+              <p>Two managers compete to assemble a complete 11-player squad on the tactical pitch, starting from Goalkeeper up to Striker. Both start with an equal transfer budget (default: €200M).</p>
+            </div>
+          </div>
+
+          <div class="rule-block">
+            <div class="rule-icon">⚡</div>
+            <div class="rule-text">
+              <h3>2. Strict Turn-Based Bidding</h3>
+              <p>Auctions are strictly turn-based. Only the active manager can place a bid (+1M, +5M, +10M, +20M, ALL IN) or Pass. There is a natural pause as managers react. The inactive player's panel is dimmed.</p>
+            </div>
+          </div>
+
+          <div class="rule-block">
+            <div class="rule-icon">🎁</div>
+            <div class="rule-text">
+              <h3>3. The Lucky Draw Rule</h3>
+              <p>When a manager passes, the other manager wins the auction player and pays their winning bid. The losing manager does NOT leave empty-handed: they instantly receive a <strong>free surprise player of the exact same position</strong> via the weighted Lucky Draw system (with chances for insane superstars, world-class gems, or unfortunate flops)!</p>
+            </div>
+          </div>
+
+          <div class="rule-block">
+            <div class="rule-icon">💰</div>
+            <div class="rule-text">
+              <h3>4. Budget Discipline</h3>
+              <p>You must fill all 11 positions. If you blow all your money in round 3, you'll be forced to rely entirely on free Lucky Draw rewards for the remaining positions.</p>
+            </div>
+          </div>
+
+          <div class="rule-block">
+            <div class="rule-icon">🏟️</div>
+            <div class="rule-text">
+              <h3>5. Match Day Simulation</h3>
+              <p>Once both squads are complete, they clash in a live 90-minute simulation with live commentary, goals, saves, cards, and an MVP crowning. Team performance is governed by sector ratings (Attack, Midfield, Defense, Goalkeeping), formation fit, and chemistry.</p>
+            </div>
+          </div>
+        </div>
+
+        <button class="reveal-btn" id="howToPlayGotItBtn" style="margin-top: 1rem;">
+          UNDERSTOOD — LET'S PLAY! ⚡
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: SETTINGS ================= -->
+    <div class="modal-overlay" id="settingsModal">
+      <div class="info-modal-card settings-card" id="settingsCard">
+        <button class="close-modal-btn" id="closeSettingsBtn">×</button>
+        <div class="modal-header-badge">⚙️ MATCH SETTINGS</div>
+        <h2 class="modal-title">GAME PREFERENCES</h2>
+
+        <div class="settings-rows">
+          <div class="settings-row">
+            <div>
+              <strong>Audio Sound FX</strong>
+              <p>Synthesized referee whistles, bids, gavels and match cheers</p>
+            </div>
+            <button class="selector-chip active" id="settingsSoundBtn">🔊 ON</button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <strong>Match Day Speed</strong>
+              <p>Controls simulation tick frequency during the 90' match</p>
+            </div>
+            <div class="mode-selector" id="settingsSpeedSelector">
+              <button class="selector-chip speed-chip active" data-speed="1">1x Normal</button>
+              <button class="selector-chip speed-chip" data-speed="2">2x Fast</button>
+              <button class="selector-chip speed-chip" data-speed="5">5x Turbo</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="reveal-btn" id="saveSettingsBtn" style="margin-top: 1.5rem;">
+          SAVE & CLOSE
+        </button>
+      </div>
+    </div>
+
+    <!-- Application Script Entry Point -->
+    <script type="module" src="/src/js/app.js"></script>
+  </body>
+</html>
