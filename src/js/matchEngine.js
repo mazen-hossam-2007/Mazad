@@ -185,12 +185,16 @@ export function generateMatchSimulation(team1, team2, options = {}) {
     };
   });
 
-  // Base Possession & Dynamic Flow with high matchday randomness
+  // Base Possession & Dynamic Flow with authentic ratings influence
+  const ovrDiff = (t1Stats.overall - t2Stats.overall);
   const midDiff = (t1Stats.midfield * (t1Stats.chemistry / 100)) - (t2Stats.midfield * (t2Stats.chemistry / 100));
   const tacticalPossDiff = t1Tactic.possMod - t2Tactic.possMod;
-  // Natural matchday form swing (+/- 8%) so any team can dominate on the day
-  const matchdayFormFactor = (Math.random() * 16 - 8);
-  const baseT1Possession = Math.max(40, Math.min(60, Math.round(50 + midDiff * 0.25 + tacticalPossDiff * 0.5 + matchdayFormFactor)));
+  
+  // High-energy matchday form swing (+/- 5%) for realistic variety
+  const matchdayFormFactor = (Math.random() * 10 - 5);
+  // Base possession heavily rewards midfield and overall superiority:
+  // If +2 or more OVR, team naturally controls 54%-64% possession
+  const baseT1Possession = Math.max(34, Math.min(66, Math.round(50 + (ovrDiff * 1.8) + (midDiff * 0.15) + (tacticalPossDiff * 0.4) + matchdayFormFactor)));
   const baseT2Possession = 100 - baseT1Possession;
 
   // Stoppage times
@@ -223,7 +227,7 @@ export function generateMatchSimulation(team1, team2, options = {}) {
   let t2Offsides = 0;
 
   // Running Momentum (-100 = P2 dominant, +100 = P1 dominant)
-  let momentum = (Math.random() * 20 - 10);
+  let momentum = (ovrDiff * 4) + (Math.random() * 12 - 6);
 
   // Kickoff Event
   events.push({
@@ -255,18 +259,24 @@ export function generateMatchSimulation(team1, team2, options = {}) {
       : `${min}'`;
 
     // Momentum decay towards center (pendulum physics)
-    momentum *= 0.55;
+    momentum *= 0.65;
 
-    // Trailing team urgency (comeback push factor)
-    const scoreDiff = t1Goals - t2Goals; // positive = P1 leading, negative = P2 leading
-    const trailingUrgency = scoreDiff * -0.06; // trailing team gets extra attacking push
+    // Tactical & match situational modifiers
+    const scoreDiff = t1Goals - t2Goals;
+    // Slight late-game push (not overpowering rubberband)
+    const tacticalUrgency = min > 70 ? (scoreDiff * -0.025) : 0;
 
-    // Random phase variation (+/- 20% randomness per attack phase)
-    const phaseNoise = (Math.random() * 0.40 - 0.20);
-    const overallDiff = (t1Stats.overall - t2Stats.overall) * 0.004;
+    // Random phase variation per phase (+/- 14% randomness)
+    const phaseNoise = (Math.random() * 0.28 - 0.14);
 
-    // Attacking probability centered at 50% with realistic variance
-    const p1AttackingProbability = Math.max(0.28, Math.min(0.72, 0.50 + overallDiff + trailingUrgency + phaseNoise + (t1RedCard ? -0.12 : 0) + (t2RedCard ? 0.12 : 0)));
+    // Core Probability Engine:
+    // When overallDiff >= +2, the higher rated team gets a decisive edge in winning the attacking phase:
+    // +2 OVR -> ~60% chance share
+    // +4 OVR -> ~70% chance share
+    // +6 OVR -> ~78% chance share
+    // When tight (|OVR diff| < 2), it is 50-50 with high tactical variance
+    const baseProbDiff = ovrDiff * 0.052;
+    const p1AttackingProbability = Math.max(0.20, Math.min(0.80, 0.50 + baseProbDiff + tacticalUrgency + phaseNoise + (t1RedCard ? -0.15 : 0) + (t2RedCard ? 0.15 : 0)));
     const attackingTeam = Math.random() < p1AttackingProbability ? 1 : 2;
 
     const team = attackingTeam === 1 ? team1 : team2;
@@ -284,14 +294,14 @@ export function generateMatchSimulation(team1, team2, options = {}) {
     const defender = pickRandom(oppDefs, pickRandom(oppAll));
 
     // Shift momentum towards attacking team
-    momentum += isP1 ? 14 : -14;
+    momentum += isP1 ? 12 : -12;
     momentum = Math.max(-95, Math.min(95, momentum));
 
     // Calculate action probabilities
     const roll = Math.random();
 
-    // 1. DANGEROUS FOUL & CARD PROBABILITY (Fouls, Yellows, Red Card drama)
-    const foulChance = 0.12 * (isP1 ? t2Tactic.foulMod : t1Tactic.foulMod);
+    // 1. DANGEROUS FOUL & CARD PROBABILITY
+    const foulChance = 0.11 * (isP1 ? t2Tactic.foulMod : t1Tactic.foulMod);
     if (roll < foulChance) {
       if (isP1) t2Fouls++; else t1Fouls++;
 
@@ -314,7 +324,7 @@ export function generateMatchSimulation(team1, team2, options = {}) {
             team: isP1 ? 2 : 1,
             momentum: Math.round(momentum),
             zone: isP1 ? "t2_third" : "t1_third",
-            text: `🟥 RED CARD! Second yellow shown to ${offendingPlayer.name}! ${oppTeam.name} are reduced to 10 men!`
+            text: `🟥 RED CARD! Second yellow shown to ${offendingPlayer.name}! ${oppTeam.name} are down to 10 men!`
           });
         } else {
           // YELLOW CARD
@@ -326,7 +336,7 @@ export function generateMatchSimulation(team1, team2, options = {}) {
             team: isP1 ? 2 : 1,
             momentum: Math.round(momentum),
             zone: isP1 ? "t2_third" : "t1_third",
-            text: `🟨 Yellow Card shown to ${offendingPlayer.name} after a reckless late tackle on ${fouledPlayer.name}.`
+            text: `🟨 Yellow Card shown to ${offendingPlayer.name} after a reckless late challenge on ${fouledPlayer.name}.`
           });
         }
       } else {
@@ -344,7 +354,7 @@ export function generateMatchSimulation(team1, team2, options = {}) {
     }
 
     // 2. CORNER KICK OR SET PIECE
-    if (roll < foulChance + 0.15) {
+    if (roll < foulChance + 0.14) {
       if (isP1) t1Corners++; else t2Corners++;
       momentum += isP1 ? 5 : -5;
       events.push({
@@ -354,13 +364,13 @@ export function generateMatchSimulation(team1, team2, options = {}) {
         team: isP1 ? 1 : 2,
         momentum: Math.round(momentum),
         zone: isP1 ? "t2_third" : "t1_third",
-        text: `🚩 Corner kick for ${team.name}. ${assister.name} steps up to whip a dangerous inswinging cross into the box.`
+        text: `🚩 Corner kick for ${team.name}. ${assister.name} steps up to deliver a dangerous cross into the box.`
       });
       return;
     }
 
     // 3. OFFSIDE OR DISALLOWED GOAL (VAR DRAMA)
-    if (roll < foulChance + 0.20) {
+    if (roll < foulChance + 0.19) {
       if (isP1) t1Offsides++; else t2Offsides++;
       const isVARGoalDrama = Math.random() < 0.25;
       if (isVARGoalDrama) {
@@ -387,9 +397,9 @@ export function generateMatchSimulation(team1, team2, options = {}) {
       return;
     }
 
-    // 4. PENALTY KICK DRAMA (VAR Handed Penalty or Box Tumble)
+    // 4. PENALTY KICK DRAMA
     const penaltyRoll = Math.random();
-    if (penaltyRoll < 0.045) {
+    if (penaltyRoll < 0.042) {
       const penaltyXG = 0.79;
       if (isP1) { t1XG = +(t1XG + penaltyXG).toFixed(2); t1Shots++; t1BigChances++; }
       else { t2XG = +(t2XG + penaltyXG).toFixed(2); t2Shots++; t2BigChances++; }
@@ -422,7 +432,7 @@ export function generateMatchSimulation(team1, team2, options = {}) {
           text: `⚽ GOAL! PENALTY SCORED! 🎯 ${attacker.name} sends ${oppGK.name} the wrong way with ice in his veins!`
         });
       } else {
-        // Penalty saved or hit post
+        // Penalty saved
         if (isP1) t2Saves++; else t1Saves++;
         if (playerStats[oppGK.id]) {
           playerStats[oppGK.id].saves++;
@@ -442,14 +452,19 @@ export function generateMatchSimulation(team1, team2, options = {}) {
       return;
     }
 
-    // 5. OPEN PLAY SHOT / GOAL ATTEMPT (Calculated with authentic xG & dynamic conversion)
-    const shooterRating = Number(attacker.shooting) || 75;
+    // 5. OPEN PLAY SHOT / GOAL ATTEMPT
+    const shooterRating = Number(attacker.shooting) || Number(attacker.rating) || 75;
     const gkRating = Number(oppGK.rating) || 75;
-    const isBigChance = Math.random() < 0.32;
+    const attSectorRating = isP1 ? t1Stats.attack : t2Stats.attack;
+    const oppDefSectorRating = isP1 ? t2Stats.defense : t1Stats.defense;
+
+    // Attack quality vs defense determines big chance frequency
+    const bigChanceThreshold = 0.28 + ((attSectorRating - oppDefSectorRating) * 0.015);
+    const isBigChance = Math.random() < Math.max(0.15, Math.min(0.55, bigChanceThreshold));
 
     // Realistic chance xG
     let chanceXG = isBigChance
-      ? +(0.35 + Math.random() * 0.32).toFixed(2)
+      ? +(0.36 + Math.random() * 0.32).toFixed(2)
       : +(0.08 + Math.random() * 0.18).toFixed(2);
 
     if (isP1) {
@@ -462,10 +477,11 @@ export function generateMatchSimulation(team1, team2, options = {}) {
       if (isBigChance) t2BigChances++;
     }
 
-    // Dynamic conversion probability with fair balance and high excitement
-    const finishSkill = (shooterRating / 80);
-    const saveSkill = (gkRating / 80);
-    const goalProbability = Math.max(0.12, Math.min(0.68, (chanceXG * finishSkill * 0.95) / (saveSkill * 0.95)));
+    // Dynamic conversion probability heavily rewards skilled attackers while giving top GKs real stopping power
+    const finishSkill = (shooterRating / 78);
+    const saveSkill = (gkRating / 78);
+    const qualityMultiplier = (attSectorRating / Math.max(60, oppDefSectorRating));
+    const goalProbability = Math.max(0.10, Math.min(0.72, (chanceXG * finishSkill * qualityMultiplier * 0.96) / (saveSkill * 0.96)));
 
     const shotOutcome = Math.random();
 
