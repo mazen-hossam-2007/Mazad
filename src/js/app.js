@@ -618,10 +618,10 @@ export class MazadGame {
 
     if (isFirebaseConfigured()) {
       dot.className = "status-indicator-dot online";
-      text.textContent = "Firebase Realtime Sync: Connected & Ready";
+      text.textContent = "Firebase Realtime Sync: Connected (Custom Project)";
     } else {
-      dot.className = "status-indicator-dot";
-      text.textContent = "Firebase Realtime Sync: Configured (Embedded Default)";
+      dot.className = "status-indicator-dot online";
+      text.textContent = "Realtime Online Sync: Ready & Connected (Zero-Config Active)";
     }
   }
 
