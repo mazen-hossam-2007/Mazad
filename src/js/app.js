@@ -973,11 +973,11 @@ export class MazadGame {
     if (this.state.screen !== "review") {
       this.state.screen = "review";
       this.showScreen("squadReviewScreen");
-      this.renderSquadReview();
+      this.showSquadReview();
     }
 
     // Sync tactics
-    if (roomData.tactics) {
+    if (roomData && roomData.tactics) {
       if (roomData.tactics.t1Tactic) this.state.t1Tactic = roomData.tactics.t1Tactic;
       if (roomData.tactics.t2Tactic) this.state.t2Tactic = roomData.tactics.t2Tactic;
       this.updateTacticalBadgesAndLabels();
@@ -1904,9 +1904,16 @@ export class MazadGame {
     const formation = FORMATIONS[this.state.formationKey] || FORMATIONS["4-3-3"];
     pitchContainer.querySelectorAll(".pitch-slot").forEach(s => s.remove());
 
+    const safeSquad = Array.isArray(squad) ? squad : [];
+
     formation.slots.forEach((slotDef, idx) => {
       const slotIndex = idx + 1;
-      const filledItem = squad.find(s => s.slotIndex === slotIndex);
+      const filledItem = safeSquad.find((s, sIdx) => {
+        if (!s) return false;
+        if (s.slotIndex === slotIndex) return true;
+        if (!s.slotIndex && sIdx === idx) return true;
+        return false;
+      });
 
       const slotEl = document.createElement("div");
       slotEl.className = "pitch-slot";
@@ -1917,8 +1924,9 @@ export class MazadGame {
         slotEl.classList.add("active-target");
       }
 
-      if (filledItem && filledItem.player) {
-        const p = filledItem.player;
+      const p = filledItem ? (filledItem.player || filledItem) : null;
+
+      if (p && (p.name || p.rating)) {
         const tier = (p && p.tier) ? String(p.tier) : (p && p.rating >= 90 ? "World Class" : p && p.rating >= 80 ? "Elite" : "Good");
         const tierClass = `tier-${tier.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
         slotEl.classList.add("filled", tierClass);
@@ -2063,6 +2071,7 @@ export class MazadGame {
               t2Tactic: this.state.t2Tactic
             });
             firebaseMultiplayer.startOnlineMatchSimulation(this.state.online.roomCode, sim);
+            this.startMatchSimulationWithData(sim);
           } else {
             this.startMatchSimulation();
           }

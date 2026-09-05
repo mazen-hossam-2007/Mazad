@@ -24,6 +24,7 @@ import {
 import { getAuth, signInAnonymously } from "firebase/auth";
 import { Peer } from "peerjs";
 import { getFirebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
+import { FORMATIONS } from "./formations.js";
 
 export class UniversalMultiplayerService {
   constructor() {
@@ -543,9 +544,27 @@ export class UniversalMultiplayerService {
         const winnerObj = gs[winnerId];
         const loserObj = gs[loserId];
 
+        const formKey = (room.settings && room.settings.formationKey) || "4-3-3";
+        const formObj = FORMATIONS[formKey] || FORMATIONS["4-3-3"];
+        const slotDef = formObj.slots[(gs.currentRound || 1) - 1] || { position: "CM", label: "CM" };
+
+        const winnerSquadItem = {
+          slotIndex: gs.currentRound || 1,
+          position: slotDef.position,
+          label: slotDef.label,
+          player: gs.currentAuctionPlayer
+        };
+
+        const loserSquadItem = {
+          slotIndex: gs.currentRound || 1,
+          position: slotDef.position,
+          label: slotDef.label,
+          player: freePlayer
+        };
+
         winnerObj.budget = Math.max(0, winnerObj.budget - finalPrice);
-        winnerObj.squad = [...(winnerObj.squad || []), gs.currentAuctionPlayer];
-        loserObj.squad = [...(loserObj.squad || []), freePlayer];
+        winnerObj.squad = [...(winnerObj.squad || []), winnerSquadItem];
+        loserObj.squad = [...(loserObj.squad || []), loserSquadItem];
 
         const roundResult = {
           winnerId,
@@ -593,9 +612,27 @@ export class UniversalMultiplayerService {
       const winnerObj = gs[winnerId];
       const loserObj = gs[loserId];
 
+      const formKey = (this.p2pRoomState.settings && this.p2pRoomState.settings.formationKey) || "4-3-3";
+      const formObj = FORMATIONS[formKey] || FORMATIONS["4-3-3"];
+      const slotDef = formObj.slots[(gs.currentRound || 1) - 1] || { position: "CM", label: "CM" };
+
+      const winnerSquadItem = {
+        slotIndex: gs.currentRound || 1,
+        position: slotDef.position,
+        label: slotDef.label,
+        player: gs.currentAuctionPlayer
+      };
+
+      const loserSquadItem = {
+        slotIndex: gs.currentRound || 1,
+        position: slotDef.position,
+        label: slotDef.label,
+        player: freePlayer
+      };
+
       winnerObj.budget = Math.max(0, winnerObj.budget - finalPrice);
-      winnerObj.squad = [...(winnerObj.squad || []), gs.currentAuctionPlayer];
-      loserObj.squad = [...(loserObj.squad || []), freePlayer];
+      winnerObj.squad = [...(winnerObj.squad || []), winnerSquadItem];
+      loserObj.squad = [...(loserObj.squad || []), loserSquadItem];
 
       gs.roundPhase = "resolved";
       gs.roundResult = {

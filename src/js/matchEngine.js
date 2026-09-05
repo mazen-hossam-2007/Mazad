@@ -69,17 +69,33 @@ export function calculateTeamStats(squad, remainingBudget = 0) {
     };
   }
 
-  const gks = squad.filter(s => s.player && s.position === "GK");
-  const defs = squad.filter(s => s.player && ["CB", "RB", "LB"].includes(s.position));
-  const mids = squad.filter(s => s.player && ["CDM", "CM", "CAM", "RM", "LM"].includes(s.position));
-  const atts = squad.filter(s => s.player && ["ST", "RW", "LW"].includes(s.position));
+  const normalized = squad.map((s, idx) => {
+    if (!s) return null;
+    if (s.player) {
+      return {
+        slotIndex: s.slotIndex || (idx + 1),
+        position: s.position || (s.player && s.player.position) || "CM",
+        player: s.player
+      };
+    }
+    return {
+      slotIndex: s.slotIndex || (idx + 1),
+      position: s.position || "CM",
+      player: s
+    };
+  }).filter(Boolean);
+
+  const gks = normalized.filter(s => s.player && (s.position === "GK" || s.player.position === "GK"));
+  const defs = normalized.filter(s => s.player && ["CB", "RB", "LB", "RWB", "LWB"].includes(s.position || s.player.position));
+  const mids = normalized.filter(s => s.player && ["CDM", "CM", "CAM", "RM", "LM"].includes(s.position || s.player.position));
+  const atts = normalized.filter(s => s.player && ["ST", "RW", "LW", "CF"].includes(s.position || s.player.position));
 
   const gkScore = gks.length ? Math.round(gks.reduce((acc, s) => acc + calculateWeightedPerformance(s.player, "GK"), 0) / gks.length) : 65;
-  const defScore = defs.length ? Math.round(defs.reduce((acc, s) => acc + calculateWeightedPerformance(s.player, s.position), 0) / defs.length) : 65;
-  const midScore = mids.length ? Math.round(mids.reduce((acc, s) => acc + calculateWeightedPerformance(s.player, s.position), 0) / mids.length) : 65;
-  const attScore = atts.length ? Math.round(atts.reduce((acc, s) => acc + calculateWeightedPerformance(s.player, s.position), 0) / atts.length) : 65;
+  const defScore = defs.length ? Math.round(defs.reduce((acc, s) => acc + calculateWeightedPerformance(s.player, s.position || s.player.position || "CB"), 0) / defs.length) : 65;
+  const midScore = mids.length ? Math.round(mids.reduce((acc, s) => acc + calculateWeightedPerformance(s.player, s.position || s.player.position || "CM"), 0) / mids.length) : 65;
+  const attScore = atts.length ? Math.round(atts.reduce((acc, s) => acc + calculateWeightedPerformance(s.player, s.position || s.player.position || "ST"), 0) / atts.length) : 65;
 
-  const validPlayers = squad.filter(s => s && s.player).map(s => s.player);
+  const validPlayers = normalized.filter(s => s && s.player).map(s => s.player);
   const avgRating = validPlayers.length
     ? Math.round(validPlayers.reduce((acc, p) => acc + (Number(p.rating) || 75), 0) / validPlayers.length)
     : 65;
