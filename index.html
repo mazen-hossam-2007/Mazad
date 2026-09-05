@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mazad Hossam — Football Auction Game</title>
-    <meta name="description" content="A competitive two-player football auction game to bid, build your dream starting XI, and battle on match day." />
-    <meta property="og:title" content="Mazad Hossam — Football Auction Game" />
-    <meta property="og:description" content="A competitive two-player football auction game to bid, build your dream starting XI, and battle on match day." />
+    <title>Mazad Hossam — Real-Time Online Football Auction Game</title>
+    <meta name="description" content="A competitive real-time online multiplayer football auction game to bid, build your dream starting XI, survive the lucky draw, and battle on match day." />
+    <meta property="og:title" content="Mazad Hossam — Real-Time Online Football Auction Game" />
+    <meta property="og:description" content="A competitive real-time online multiplayer football auction game to bid, build your dream starting XI, survive the lucky draw, and battle on match day." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
 
@@ -29,6 +29,13 @@
         </div>
       </div>
       <div class="header-controls" id="headerControls">
+        <div class="online-status-pill" id="headerOnlinePill" style="display: none;">
+          <span class="online-dot"></span>
+          <span id="headerRoomLabel">Room: ------</span>
+        </div>
+        <button class="header-btn" id="headerFirebaseBtn" title="Firebase Realtime Multiplayer Setup">
+          🔥 Firebase
+        </button>
         <button class="header-btn" id="headerRulesBtn" title="How to Play Mazad Hossam">
           📖 Rules
         </button>
@@ -63,6 +70,10 @@
 
             <!-- Quick Action Buttons -->
             <div class="menu-action-buttons" id="mainMenuButtons">
+              <button class="menu-btn online-menu-btn" id="onlineMultiplayerBtn">
+                🌐 ONLINE MULTIPLAYER
+                <span class="menu-btn-sub">Play with a friend across devices • Room Code</span>
+              </button>
               <button class="menu-btn primary-menu-btn" id="quickMatchBtn">
                 ⚡ QUICK MATCH
                 <span class="menu-btn-sub">€200M • 4-3-3 • All Leagues</span>
@@ -198,6 +209,7 @@
                 <button class="selector-chip timer-chip active" data-timer="10">10 Seconds</button>
                 <button class="selector-chip timer-chip" data-timer="15">15 Seconds</button>
                 <button class="selector-chip timer-chip" data-timer="30">30 Seconds</button>
+                <button class="selector-chip timer-chip" data-timer="40">40 Seconds</button>
                 <button class="selector-chip timer-chip" data-timer="0">Timer OFF</button>
               </div>
             </div>
@@ -207,6 +219,289 @@
               START AUCTION ⚡
             </button>
 
+          </div>
+
+        </div>
+      </section>
+
+
+      <!-- ================= 1B. ONLINE MULTIPLAYER LOBBY SCREEN ================= -->
+      <section class="screen" id="onlineLobbyScreen">
+        <div class="online-lobby-container" id="onlineLobbyContainer">
+
+          <!-- View 1: Mode Selection (Create / Join / Firebase Config) -->
+          <div class="online-view" id="onlineChoiceView">
+            <div class="hero-box" style="margin-bottom: 2rem;">
+              <div class="hero-badge">🌐 REAL-TIME ONLINE MULTIPLAYER</div>
+              <h2 class="hero-title">
+                PLAY ACROSS DEVICES<br>
+                <span class="highlight">HOST OR JOIN A ROOM</span>
+              </h2>
+              <p class="hero-subtitle">
+                Battle your friends live with real-time Firebase synchronization. One creates the room code, the other joins from any mobile or desktop device!
+              </p>
+            </div>
+
+            <!-- Firebase Connection Status Banner -->
+            <div class="firebase-status-banner" id="firebaseStatusBanner">
+              <div class="firebase-status-info">
+                <span class="status-indicator-dot" id="firebaseStatusDot"></span>
+                <span id="firebaseStatusText">Firebase Realtime Sync: Initializing...</span>
+              </div>
+              <button class="header-btn" id="openFirebaseSetupBtn">⚙️ Firebase Settings</button>
+            </div>
+
+            <div class="online-choice-grid">
+              <div class="online-choice-card" id="chooseCreateRoomCard">
+                <div class="choice-icon">👑</div>
+                <h3>CREATE ROOM (HOST)</h3>
+                <p>Generate a unique 6-character room code, customize match settings, and host a live match.</p>
+                <button class="menu-btn primary-menu-btn" id="btnGoToCreateRoom">
+                  CREATE ROOM ⚡
+                </button>
+              </div>
+
+              <div class="online-choice-card" id="chooseJoinRoomCard">
+                <div class="choice-icon">🚀</div>
+                <h3>JOIN ROOM (GUEST)</h3>
+                <p>Have a 6-character room code from your friend? Enter it here to join their live room instantly.</p>
+                <button class="menu-btn secondary-menu-btn" id="btnGoToJoinRoom">
+                  JOIN ROOM 🔑
+                </button>
+              </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 2rem;">
+              <button class="header-btn" id="btnBackToMainMenu">
+                ⬅️ Back to Main Menu
+              </button>
+            </div>
+          </div>
+
+
+          <!-- View 2: Create Room (Host View) -->
+          <div class="online-view" id="onlineCreateView" style="display: none;">
+            <div class="config-card" style="max-width: 820px; margin: 0 auto;">
+              
+              <div class="config-header-row">
+                <div>
+                  <h3 class="config-title">👑 HOSTING MATCH ROOM</h3>
+                  <span class="config-subtitle">Share this room code with your opponent</span>
+                </div>
+                <div class="room-code-badge-wrap">
+                  <span class="room-code-label">ROOM CODE</span>
+                  <div class="room-code-display" id="hostRoomCodeDisplay">------</div>
+                  <button class="copy-code-btn" id="btnCopyHostCode" title="Copy room code to clipboard">
+                    📋 COPY
+                  </button>
+                </div>
+              </div>
+
+              <div class="copy-feedback-banner" id="hostCopyFeedback" style="display: none;">
+                ✅ Room code copied to clipboard! Share it with Player 2.
+              </div>
+
+              <!-- Connected Players Status -->
+              <div class="config-group">
+                <label class="config-label">Connected Players (2 Required to Start)</label>
+                <div class="connected-players-grid">
+                  <div class="connected-player-card p1-connected" id="hostP1StatusCard">
+                    <div class="player-status-avatar">1</div>
+                    <div class="player-status-details">
+                      <strong id="hostP1NameDisplay">Player 1 (Host)</strong>
+                      <span class="status-tag tag-ready">🟢 READY (YOU)</span>
+                    </div>
+                  </div>
+
+                  <div class="connected-player-card p2-waiting" id="hostP2StatusCard">
+                    <div class="player-status-avatar">2</div>
+                    <div class="player-status-details">
+                      <strong id="hostP2NameDisplay">Waiting for opponent...</strong>
+                      <span class="status-tag tag-waiting" id="hostP2StatusTag">⏳ SHARE CODE TO CONNECT</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Host Name Input -->
+              <div class="config-group">
+                <label class="config-label">Your Manager Name</label>
+                <input type="text" id="hostPlayerNameInput" class="input-box" value="Manager 1" maxlength="16" placeholder="Enter your name" />
+              </div>
+
+              <!-- Match Settings (Synchronized to Guest in Real Time) -->
+              <div class="config-group">
+                <label class="config-label">Starting Budget Per Manager (Live Synced)</label>
+                <div class="budget-presets" id="onlineBudgetPresets">
+                  <button class="selector-chip online-budget-chip" data-budget="50">€50M</button>
+                  <button class="selector-chip online-budget-chip" data-budget="100">€100M</button>
+                  <button class="selector-chip online-budget-chip" data-budget="150">€150M</button>
+                  <button class="selector-chip online-budget-chip active" data-budget="200">€200M</button>
+                  <button class="selector-chip online-budget-chip" data-budget="300">€300M</button>
+                  <button class="selector-chip online-budget-chip" data-budget="500">€500M</button>
+                </div>
+              </div>
+
+              <div class="config-group">
+                <label class="config-label">League Player Pool (Live Synced)</label>
+                <div class="league-selector-grid" id="onlineLeagueGrid">
+                  <button class="selector-chip online-league-chip active" data-league="ALL LEAGUES">🌍 ALL LEAGUES</button>
+                  <button class="selector-chip online-league-chip" data-league="Premier League">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League</button>
+                  <button class="selector-chip online-league-chip" data-league="La Liga">🇪🇸 La Liga</button>
+                  <button class="selector-chip online-league-chip" data-league="Serie A">🇮🇹 Serie A</button>
+                  <button class="selector-chip online-league-chip" data-league="Bundesliga">🇩🇪 Bundesliga</button>
+                  <button class="selector-chip online-league-chip" data-league="Ligue 1">🇫🇷 Ligue 1</button>
+                  <button class="selector-chip online-league-chip" data-league="Saudi Pro League">🇸🇦 Saudi Pro League</button>
+                  <button class="selector-chip online-league-chip" data-league="MLS">🇺🇸 MLS</button>
+                  <button class="selector-chip online-league-chip" data-league="Egyptian Premier League & Cup">🇪🇬 Egyptian League</button>
+                </div>
+              </div>
+
+              <div class="config-group">
+                <label class="config-label">Pitch Formation (Live Synced)</label>
+                <div class="formation-presets" id="onlineFormationPresets">
+                  <button class="selector-chip online-formation-chip active" data-formation="4-3-3">4-3-3</button>
+                  <button class="selector-chip online-formation-chip" data-formation="4-4-2">4-4-2</button>
+                  <button class="selector-chip online-formation-chip" data-formation="4-2-3-1">4-2-3-1</button>
+                  <button class="selector-chip online-formation-chip" data-formation="3-5-2">3-5-2</button>
+                  <button class="selector-chip online-formation-chip" data-formation="4-3-2-1">4-3-2-1</button>
+                </div>
+              </div>
+
+              <div class="config-group">
+                <label class="config-label">Auction Countdown Timer (Live Synced)</label>
+                <div class="mode-selector" id="onlineTimerPresets">
+                  <button class="selector-chip online-timer-chip" data-timer="5">5 Seconds</button>
+                  <button class="selector-chip online-timer-chip active" data-timer="10">10 Seconds</button>
+                  <button class="selector-chip online-timer-chip" data-timer="15">15 Seconds</button>
+                  <button class="selector-chip online-timer-chip" data-timer="30">30 Seconds</button>
+                  <button class="selector-chip online-timer-chip" data-timer="40">40 Seconds</button>
+                  <button class="selector-chip online-timer-chip" data-timer="0">Timer OFF</button>
+                </div>
+              </div>
+
+              <!-- Start Button & Cancel -->
+              <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="start-btn" id="btnStartOnlineAuction" disabled style="flex: 2; opacity: 0.5;">
+                  ⏳ WAITING FOR OPPONENT...
+                </button>
+                <button class="header-btn" id="btnCancelHostRoom" style="flex: 1;">
+                  ✖ Cancel Room
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+
+          <!-- View 3: Join Room (Guest Enter Code) -->
+          <div class="online-view" id="onlineJoinView" style="display: none;">
+            <div class="config-card" style="max-width: 580px; margin: 0 auto;">
+              
+              <div class="config-header-row">
+                <h3 class="config-title">🚀 JOIN MULTIPLAYER ROOM</h3>
+                <span class="config-subtitle">Enter your friend's 6-character room code</span>
+              </div>
+
+              <div class="config-group">
+                <label class="config-label">Your Manager Name</label>
+                <input type="text" id="joinPlayerNameInput" class="input-box" value="Manager 2" maxlength="16" placeholder="Enter your name" />
+              </div>
+
+              <div class="config-group">
+                <label class="config-label">6-Character Room Code</label>
+                <input type="text" id="joinRoomCodeInput" class="input-box room-code-input" placeholder="e.g. M7K4PX" maxlength="6" autocomplete="off" />
+              </div>
+
+              <div class="join-error-banner" id="joinErrorBanner" style="display: none;">
+                <!-- Error messages shown here -->
+              </div>
+
+              <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="start-btn" id="btnSubmitJoinRoom" style="flex: 2;">
+                  JOIN ROOM 🚀
+                </button>
+                <button class="header-btn" id="btnCancelJoinRoom" style="flex: 1;">
+                  ⬅️ Back
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+
+          <!-- View 4: Guest Lobby (Connected & Synchronizing with Host) -->
+          <div class="online-view" id="onlineGuestLobbyView" style="display: none;">
+            <div class="config-card" style="max-width: 720px; margin: 0 auto;">
+              
+              <div class="config-header-row">
+                <div>
+                  <h3 class="config-title">🟢 CONNECTED TO ROOM</h3>
+                  <span class="config-subtitle">Waiting for host to configure and launch match</span>
+                </div>
+                <div class="room-code-badge-wrap">
+                  <span class="room-code-label">ROOM CODE</span>
+                  <div class="room-code-display" id="guestRoomCodeDisplay">------</div>
+                </div>
+              </div>
+
+              <!-- Connected Players Summary -->
+              <div class="config-group">
+                <label class="config-label">Room Matchup</label>
+                <div class="connected-players-grid">
+                  <div class="connected-player-card p1-connected">
+                    <div class="player-status-avatar">1</div>
+                    <div class="player-status-details">
+                      <strong id="guestP1NameDisplay">Player 1 (Host)</strong>
+                      <span class="status-tag tag-ready">👑 HOST</span>
+                    </div>
+                  </div>
+
+                  <div class="connected-player-card p2-connected">
+                    <div class="player-status-avatar">2</div>
+                    <div class="player-status-details">
+                      <strong id="guestP2NameDisplay">You (Player 2)</strong>
+                      <span class="status-tag tag-ready">🟢 CONNECTED</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Synchronized Match Settings Preview (Live Host Updates) -->
+              <div class="config-group">
+                <label class="config-label">Live Match Settings (Configured by Host)</label>
+                <div class="guest-settings-preview-grid">
+                  <div class="preview-item">
+                    <span class="preview-label">Starting Budget</span>
+                    <strong class="preview-val" id="previewBudgetVal">€200M</strong>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">League Pool</span>
+                    <strong class="preview-val" id="previewLeagueVal">ALL LEAGUES</strong>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Formation</span>
+                    <strong class="preview-val" id="previewFormationVal">4-3-3</strong>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Turn Timer</span>
+                    <strong class="preview-val" id="previewTimerVal">10s</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="guest-waiting-animation">
+                <div class="pulse-radar-dot"></div>
+                <span>Host is setting up the match... The auction will launch automatically!</span>
+              </div>
+
+              <div style="text-align: center; margin-top: 1.5rem;">
+                <button class="header-btn" id="btnLeaveGuestLobby">
+                  ✖ Leave Room
+                </button>
+              </div>
+
+            </div>
           </div>
 
         </div>
@@ -716,6 +1011,83 @@
         <button class="reveal-btn" id="saveSettingsBtn" style="margin-top: 1.5rem;">
           SAVE & CLOSE
         </button>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: FIREBASE CONFIGURATION & REALTIME SETUP ================= -->
+    <div class="modal-overlay" id="firebaseSetupModal">
+      <div class="info-modal-card settings-card" id="firebaseSetupCard" style="max-width: 680px;">
+        <button class="close-modal-btn" id="closeFirebaseSetupBtn">×</button>
+        <div class="modal-header-badge">🔥 FIREBASE REALTIME MULTIPLAYER</div>
+        <h2 class="modal-title">FIREBASE PROJECT CREDENTIALS</h2>
+        <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: -0.5rem; margin-bottom: 1.2rem;">
+          Connect your free Firebase project to enable cross-device online multiplayer rooms. You can configure this directly in <code>src/js/firebase-config.js</code> or paste your web config object below:
+        </p>
+
+        <div class="firebase-fields-grid">
+          <div class="field-item">
+            <label>API Key (apiKey)</label>
+            <input type="text" id="fbApiKeyInput" class="input-box" placeholder="AIzaSy..." />
+          </div>
+          <div class="field-item">
+            <label>Database URL (databaseURL)</label>
+            <input type="text" id="fbDbUrlInput" class="input-box" placeholder="https://your-app-default-rtdb.firebaseio.com" />
+          </div>
+          <div class="field-item">
+            <label>Project ID (projectId)</label>
+            <input type="text" id="fbProjectIdInput" class="input-box" placeholder="your-app-id" />
+          </div>
+          <div class="field-item">
+            <label>Auth Domain (authDomain)</label>
+            <input type="text" id="fbAuthDomainInput" class="input-box" placeholder="your-app.firebaseapp.com" />
+          </div>
+          <div class="field-item">
+            <label>Storage Bucket (storageBucket)</label>
+            <input type="text" id="fbStorageBucketInput" class="input-box" placeholder="your-app.appspot.com" />
+          </div>
+          <div class="field-item">
+            <label>App ID (appId)</label>
+            <input type="text" id="fbAppIdInput" class="input-box" placeholder="1:123456789:web:abcdef..." />
+          </div>
+        </div>
+
+        <div class="firebase-test-feedback" id="firebaseTestFeedback" style="display: none; margin-top: 1rem;">
+          <!-- Feedback message -->
+        </div>
+
+        <div style="display: flex; gap: 0.8rem; margin-top: 1.5rem;">
+          <button class="reveal-btn" id="saveAndTestFirebaseBtn" style="flex: 2;">
+            💾 SAVE & TEST REALTIME SYNC
+          </button>
+          <button class="header-btn" id="clearFirebaseConfigBtn" style="flex: 1;">
+            🗑️ Clear
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ================= MODAL: OPPONENT DISCONNECTED / RECONNECTING ================= -->
+    <div class="modal-overlay" id="disconnectOverlayModal">
+      <div class="reveal-modal" id="disconnectModalCard" style="border-color: #ef4444; max-width: 480px;">
+        <div class="trophy-badge" style="background: rgba(239, 68, 68, 0.15); border-color: #ef4444; color: #ef4444;">⚠️</div>
+        <h3 class="reveal-title" style="color: #ef4444;">OPPONENT DISCONNECTED</h3>
+        <p style="color: var(--text-dim); font-size: 0.95rem; margin: 0.5rem 0 1.2rem;" id="disconnectStatusMessage">
+          Waiting for opponent to reconnect to room...
+        </p>
+
+        <div class="disconnect-countdown-pill" id="disconnectCountdownPill">
+          ⏳ Reconnection Window: <strong id="disconnectTimerSec">30s</strong>
+        </div>
+
+        <div style="display: flex; gap: 0.8rem; margin-top: 1.5rem;">
+          <button class="reveal-btn" id="btnClaimForfeitWin" style="flex: 1.5; background: #22c55e;">
+            🏆 CLAIM VICTORY
+          </button>
+          <button class="header-btn" id="btnExitDisconnectModal" style="flex: 1;">
+            🚪 Exit to Menu
+          </button>
+        </div>
       </div>
     </div>
 

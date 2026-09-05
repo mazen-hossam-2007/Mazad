@@ -9,12 +9,14 @@ import { FORMATIONS } from "./formations.js";
 import { AuctionAI } from "./ai.js";
 import { sound } from "./audio.js";
 import { calculateTeamStats, generateMatchSimulation, TACTICAL_STYLES } from "./matchEngine.js";
+import { firebaseMultiplayer } from "./firebase-service.js";
+import { getFirebaseConfig, saveFirebaseConfig, clearFirebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
 
 export class MazadGame {
   constructor() {
     this.state = {
-      screen: "start", // start | auction | review | match | winner
-      mode: "pvp", // pvp | ai
+      screen: "start", // start | onlineLobby | auction | review | match | winner
+      mode: "pvp", // pvp | ai | online
       aiDifficulty: "normal", // easy | normal | hard | expert
       selectedLeague: "ALL LEAGUES",
       startingBudget: 200,
@@ -56,7 +58,22 @@ export class MazadGame {
       matchCurrentMinute: 0,
       matchInterval: null,
       matchSpeed: 1,
-      matchCurrentEventIndex: 0
+      matchCurrentEventIndex: 0,
+
+      // Online Multiplayer State
+      online: {
+        isOnline: false,
+        roomCode: null,
+        role: null, // "player1" | "player2"
+        roomData: null,
+        opponentConnected: true,
+        disconnectCountdown: 30,
+        disconnectInterval: null,
+        unsubRoomListener: null,
+        lastProcessedPhase: null,
+        lastProcessedRound: 0,
+        luckyModalOpen: false
+      }
     };
 
     this.ai = new AuctionAI("normal");
@@ -75,6 +92,11 @@ export class MazadGame {
     }
 
     // Header Navigation buttons
+    const headerFirebaseBtn = document.getElementById("headerFirebaseBtn");
+    if (headerFirebaseBtn) {
+      headerFirebaseBtn.addEventListener("click", () => this.openFirebaseSetupModal());
+    }
+
     const headerRulesBtn = document.getElementById("headerRulesBtn");
     if (headerRulesBtn) {
       headerRulesBtn.addEventListener("click", () => this.openModal("howToPlayModal"));
@@ -124,13 +146,29 @@ export class MazadGame {
       });
     }
 
+    // Disconnect modal buttons
+    const btnClaimForfeitWin = document.getElementById("btnClaimForfeitWin");
+    if (btnClaimForfeitWin) {
+      btnClaimForfeitWin.addEventListener("click", () => this.claimForfeitVictory());
+    }
+    const btnExitDisconnectModal = document.getElementById("btnExitDisconnectModal");
+    if (btnExitDisconnectModal) {
+      btnExitDisconnectModal.addEventListener("click", () => this.exitGame());
+    }
+
     // Start Screen Selectors & Menus
     this.setupStartScreenEvents();
+    this.setupOnlineMultiplayerEvents();
+    this.setupFirebaseModalEvents();
   }
 
   confirmExitGame() {
     sound.playClick();
-    const confirmed = window.confirm("Are you sure you want to exit to the Main Menu? Your current match progress will be lost.");
+    const isOnline = this.state.online.isOnline;
+    const msg = isOnline
+      ? "Are you sure you want to leave this online multiplayer match? Leaving will forfeit the game."
+      : "Are you sure you want to exit to the Main Menu? Your current match progress will be lost.";
+    const confirmed = window.confirm(msg);
     if (confirmed) {
       this.exitGame();
     }
@@ -143,9 +181,18 @@ export class MazadGame {
       clearTimeout(this.state.luckyAdvanceTimer);
       this.state.luckyAdvanceTimer = null;
     }
+    if (this.state.online.disconnectInterval) {
+      clearInterval(this.state.online.disconnectInterval);
+      this.state.online.disconnectInterval = null;
+    }
     this.state.isPaused = false;
     this.state.aiThinking = false;
     this.state.isTransitioning = false;
+
+    // Leave online room if active
+    if (this.state.online.isOnline) {
+      this.leaveOnlineRoom();
+    }
 
     // Hide all modals
     document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("active"));
@@ -157,6 +204,10 @@ export class MazadGame {
     this.state.player1.budget = this.state.startingBudget;
     this.state.player2.budget = this.state.startingBudget;
     this.state.usedPlayerIds = [];
+    this.state.mode = "pvp";
+
+    const headerOnlinePill = document.getElementById("headerOnlinePill");
+    if (headerOnlinePill) headerOnlinePill.style.display = "none";
 
     // Return to start screen
     this.showScreen("startScreen");
@@ -176,6 +227,15 @@ export class MazadGame {
   }
 
   setupStartScreenEvents() {
+    // Online Multiplayer Menu Button
+    const onlineMultiplayerBtn = document.getElementById("onlineMultiplayerBtn");
+    if (onlineMultiplayerBtn) {
+      onlineMultiplayerBtn.addEventListener("click", () => {
+        sound.playClick();
+        this.showOnlineLobby();
+      });
+    }
+
     // Quick Match Button
     const quickMatchBtn = document.getElementById("quickMatchBtn");
     if (quickMatchBtn) {
@@ -302,6 +362,697 @@ export class MazadGame {
         this.startGame();
       });
     }
+  }
+
+  // =========================================================================
+  // ONLINE MULTIPLAYER METHODS
+  // =========================================================================
+
+  setupOnlineMultiplayerEvents() {
+    // Navigation inside online lobby
+    const btnGoToCreateRoom = document.getElementById("btnGoToCreateRoom");
+    if (btnGoToCreateRoom) {
+      btnGoToCreateRoom.addEventListener("click", () => this.handleCreateOnlineRoom());
+    }
+
+    const btnGoToJoinRoom = document.getElementById("btnGoToJoinRoom");
+    if (btnGoToJoinRoom) {
+      btnGoToJoinRoom.addEventListener("click", () => {
+        sound.playClick();
+        this.showOnlineView("onlineJoinView");
+        const joinInput = document.getElementById("joinRoomCodeInput");
+        if (joinInput) {
+          joinInput.value = "";
+          joinInput.focus();
+        }
+      });
+    }
+
+    const btnBackToMainMenu = document.getElementById("btnBackToMainMenu");
+    if (btnBackToMainMenu) {
+      btnBackToMainMenu.addEventListener("click", () => {
+        sound.playClick();
+        this.showScreen("startScreen");
+      });
+    }
+
+    const openFirebaseSetupBtn = document.getElementById("openFirebaseSetupBtn");
+    if (openFirebaseSetupBtn) {
+      openFirebaseSetupBtn.addEventListener("click", () => this.openFirebaseSetupModal());
+    }
+
+    // Host room controls
+    const btnCopyHostCode = document.getElementById("btnCopyHostCode");
+    if (btnCopyHostCode) {
+      btnCopyHostCode.addEventListener("click", () => this.copyHostCode());
+    }
+
+    const hostPlayerNameInput = document.getElementById("hostPlayerNameInput");
+    if (hostPlayerNameInput) {
+      hostPlayerNameInput.addEventListener("input", (e) => {
+        const val = e.target.value.trim() || "Manager 1";
+        this.state.player1.name = val;
+        const p1NameDisp = document.getElementById("hostP1NameDisplay");
+        if (p1NameDisp) p1NameDisp.textContent = `${val} (Host)`;
+        if (this.state.online.roomCode) {
+          this.updateHostSettingsInFirebase();
+        }
+      });
+    }
+
+    // Host Match Setting Selectors (Live Synchronized to Guest)
+    document.querySelectorAll(".online-budget-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll(".online-budget-chip").forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+        this.state.startingBudget = parseInt(chip.dataset.budget, 10);
+        sound.playClick();
+        this.updateHostSettingsInFirebase();
+      });
+    });
+
+    document.querySelectorAll(".online-league-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll(".online-league-chip").forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+        this.state.selectedLeague = chip.dataset.league;
+        sound.playClick();
+        this.updateHostSettingsInFirebase();
+      });
+    });
+
+    document.querySelectorAll(".online-formation-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll(".online-formation-chip").forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+        this.state.formationKey = chip.dataset.formation;
+        sound.playClick();
+        this.updateHostSettingsInFirebase();
+      });
+    });
+
+    document.querySelectorAll(".online-timer-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll(".online-timer-chip").forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+        const dur = parseInt(chip.dataset.timer, 10);
+        this.state.timerEnabled = dur > 0;
+        this.state.timerDuration = dur > 0 ? dur : 10;
+        sound.playClick();
+        this.updateHostSettingsInFirebase();
+      });
+    });
+
+    const btnStartOnlineAuction = document.getElementById("btnStartOnlineAuction");
+    if (btnStartOnlineAuction) {
+      btnStartOnlineAuction.addEventListener("click", () => this.startOnlineAuctionFromHost());
+    }
+
+    const btnCancelHostRoom = document.getElementById("btnCancelHostRoom");
+    if (btnCancelHostRoom) {
+      btnCancelHostRoom.addEventListener("click", () => {
+        sound.playClick();
+        this.leaveOnlineRoom();
+        this.showOnlineView("onlineChoiceView");
+      });
+    }
+
+    // Join room controls
+    const btnSubmitJoinRoom = document.getElementById("btnSubmitJoinRoom");
+    if (btnSubmitJoinRoom) {
+      btnSubmitJoinRoom.addEventListener("click", () => this.handleJoinOnlineRoom());
+    }
+
+    const joinRoomCodeInput = document.getElementById("joinRoomCodeInput");
+    if (joinRoomCodeInput) {
+      joinRoomCodeInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this.handleJoinOnlineRoom();
+      });
+      joinRoomCodeInput.addEventListener("input", (e) => {
+        e.target.value = e.target.value.toUpperCase().trim();
+      });
+    }
+
+    const btnCancelJoinRoom = document.getElementById("btnCancelJoinRoom");
+    if (btnCancelJoinRoom) {
+      btnCancelJoinRoom.addEventListener("click", () => {
+        sound.playClick();
+        this.showOnlineView("onlineChoiceView");
+      });
+    }
+
+    // Guest lobby controls
+    const btnLeaveGuestLobby = document.getElementById("btnLeaveGuestLobby");
+    if (btnLeaveGuestLobby) {
+      btnLeaveGuestLobby.addEventListener("click", () => {
+        sound.playClick();
+        this.leaveOnlineRoom();
+        this.showOnlineView("onlineChoiceView");
+      });
+    }
+  }
+
+  setupFirebaseModalEvents() {
+    const closeFirebaseSetupBtn = document.getElementById("closeFirebaseSetupBtn");
+    if (closeFirebaseSetupBtn) {
+      closeFirebaseSetupBtn.addEventListener("click", () => this.closeModal("firebaseSetupModal"));
+    }
+
+    const saveAndTestFirebaseBtn = document.getElementById("saveAndTestFirebaseBtn");
+    if (saveAndTestFirebaseBtn) {
+      saveAndTestFirebaseBtn.addEventListener("click", async () => {
+        sound.playClick();
+        const feedback = document.getElementById("firebaseTestFeedback");
+        if (feedback) {
+          feedback.style.display = "block";
+          feedback.style.color = "#fbbf24";
+          feedback.innerHTML = "⏳ Testing Firebase Realtime Database connection...";
+        }
+
+        const config = {
+          apiKey: document.getElementById("fbApiKeyInput")?.value.trim() || "",
+          databaseURL: document.getElementById("fbDbUrlInput")?.value.trim() || "",
+          projectId: document.getElementById("fbProjectIdInput")?.value.trim() || "",
+          authDomain: document.getElementById("fbAuthDomainInput")?.value.trim() || "",
+          storageBucket: document.getElementById("fbStorageBucketInput")?.value.trim() || "",
+          appId: document.getElementById("fbAppIdInput")?.value.trim() || ""
+        };
+
+        saveFirebaseConfig(config);
+        const res = await firebaseMultiplayer.testConnection();
+        if (res.success) {
+          if (feedback) {
+            feedback.style.color = "#4ade80";
+            feedback.innerHTML = "✅ Firebase connected successfully! Anonymous auth and Realtime Sync are ready.";
+          }
+          this.updateFirebaseStatusBanner();
+        } else {
+          if (feedback) {
+            feedback.style.color = "#f87171";
+            feedback.innerHTML = `⚠️ Connection error: ${res.error}. Please check your databaseURL and Realtime Database rules.`;
+          }
+          this.updateFirebaseStatusBanner();
+        }
+      });
+    }
+
+    const clearFirebaseConfigBtn = document.getElementById("clearFirebaseConfigBtn");
+    if (clearFirebaseConfigBtn) {
+      clearFirebaseConfigBtn.addEventListener("click", () => {
+        sound.playClick();
+        clearFirebaseConfig();
+        this.populateFirebaseModalInputs();
+        const feedback = document.getElementById("firebaseTestFeedback");
+        if (feedback) {
+          feedback.style.display = "block";
+          feedback.style.color = "#94a3b8";
+          feedback.innerHTML = "Cleared custom credentials. Default embedded project config restored.";
+        }
+        this.updateFirebaseStatusBanner();
+      });
+    }
+  }
+
+  populateFirebaseModalInputs() {
+    const config = getFirebaseConfig();
+    const map = {
+      fbApiKeyInput: config.apiKey,
+      fbDbUrlInput: config.databaseURL,
+      fbProjectIdInput: config.projectId,
+      fbAuthDomainInput: config.authDomain,
+      fbStorageBucketInput: config.storageBucket,
+      fbAppIdInput: config.appId
+    };
+    for (const [id, val] of Object.entries(map)) {
+      const el = document.getElementById(id);
+      if (el) el.value = val || "";
+    }
+  }
+
+  openFirebaseSetupModal() {
+    this.populateFirebaseModalInputs();
+    this.openModal("firebaseSetupModal");
+  }
+
+  showOnlineLobby() {
+    this.state.screen = "onlineLobby";
+    this.showScreen("onlineLobbyScreen");
+    this.showOnlineView("onlineChoiceView");
+    this.updateFirebaseStatusBanner();
+  }
+
+  showOnlineView(viewId) {
+    document.querySelectorAll(".online-view").forEach(v => v.style.display = "none");
+    const target = document.getElementById(viewId);
+    if (target) {
+      target.style.display = "block";
+      window.scrollTo(0, 0);
+    }
+  }
+
+  updateFirebaseStatusBanner() {
+    const banner = document.getElementById("firebaseStatusBanner");
+    const dot = document.getElementById("firebaseStatusDot");
+    const text = document.getElementById("firebaseStatusText");
+    if (!banner || !dot || !text) return;
+
+    if (isFirebaseConfigured()) {
+      dot.className = "status-indicator-dot online";
+      text.textContent = "Firebase Realtime Sync: Connected & Ready";
+    } else {
+      dot.className = "status-indicator-dot";
+      text.textContent = "Firebase Realtime Sync: Configured (Embedded Default)";
+    }
+  }
+
+  async handleCreateOnlineRoom() {
+    sound.playClick();
+    const hostName = document.getElementById("hostPlayerNameInput")?.value.trim() || "Manager 1";
+    this.state.player1.name = hostName;
+
+    const initialSettings = {
+      startingBudget: this.state.startingBudget,
+      formationKey: this.state.formationKey,
+      selectedLeague: this.state.selectedLeague,
+      timerDuration: this.state.timerDuration,
+      timerEnabled: this.state.timerEnabled
+    };
+
+    const res = await firebaseMultiplayer.createRoom(hostName, initialSettings);
+    if (!res.success) {
+      alert(`Could not create online room: ${res.error}`);
+      return;
+    }
+
+    const roomCode = res.roomCode;
+    this.state.online.isOnline = true;
+    this.state.online.roomCode = roomCode;
+    this.state.online.role = "player1";
+    this.state.mode = "online";
+
+    // Update UI
+    const codeDisp = document.getElementById("hostRoomCodeDisplay");
+    if (codeDisp) codeDisp.textContent = roomCode;
+
+    const hostP1Name = document.getElementById("hostP1NameDisplay");
+    if (hostP1Name) hostP1Name.textContent = `${hostName} (Host)`;
+
+    const startBtn = document.getElementById("btnStartOnlineAuction");
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.style.opacity = "0.5";
+      startBtn.textContent = "⏳ WAITING FOR OPPONENT...";
+    }
+
+    const headerOnlinePill = document.getElementById("headerOnlinePill");
+    const headerRoomLabel = document.getElementById("headerRoomLabel");
+    if (headerOnlinePill && headerRoomLabel) {
+      headerOnlinePill.style.display = "inline-flex";
+      headerRoomLabel.textContent = `Room: ${roomCode}`;
+    }
+
+    this.showOnlineView("onlineCreateView");
+
+    // Subscribe to room updates
+    this.subscribeToOnlineRoom(roomCode);
+  }
+
+  async handleJoinOnlineRoom() {
+    sound.playClick();
+    const joinInput = document.getElementById("joinRoomCodeInput");
+    const nameInput = document.getElementById("joinPlayerNameInput");
+    const errorBanner = document.getElementById("joinErrorBanner");
+
+    const roomCode = (joinInput?.value || "").trim().toUpperCase();
+    const guestName = (nameInput?.value || "").trim() || "Manager 2";
+
+    if (!roomCode || roomCode.length !== 6) {
+      if (errorBanner) {
+        errorBanner.style.display = "block";
+        errorBanner.textContent = "Please enter a valid 6-character room code.";
+      }
+      return;
+    }
+
+    if (errorBanner) errorBanner.style.display = "none";
+
+    const submitBtn = document.getElementById("btnSubmitJoinRoom");
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "CONNECTING...";
+    }
+
+    const res = await firebaseMultiplayer.joinRoom(roomCode, guestName);
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "JOIN ROOM 🚀";
+    }
+
+    if (!res.success) {
+      if (errorBanner) {
+        errorBanner.style.display = "block";
+        errorBanner.textContent = res.error;
+      }
+      return;
+    }
+
+    this.state.online.isOnline = true;
+    this.state.online.roomCode = roomCode;
+    this.state.online.role = "player2";
+    this.state.player2.name = guestName;
+    this.state.mode = "online";
+
+    const guestCodeDisp = document.getElementById("guestRoomCodeDisplay");
+    if (guestCodeDisp) guestCodeDisp.textContent = roomCode;
+
+    const guestP2Name = document.getElementById("guestP2NameDisplay");
+    if (guestP2Name) guestP2Name.textContent = `${guestName} (You)`;
+
+    const headerOnlinePill = document.getElementById("headerOnlinePill");
+    const headerRoomLabel = document.getElementById("headerRoomLabel");
+    if (headerOnlinePill && headerRoomLabel) {
+      headerOnlinePill.style.display = "inline-flex";
+      headerRoomLabel.textContent = `Room: ${roomCode}`;
+    }
+
+    this.showOnlineView("onlineGuestLobbyView");
+
+    // Subscribe to room updates
+    this.subscribeToOnlineRoom(roomCode);
+  }
+
+  copyHostCode() {
+    sound.playClick();
+    const roomCode = this.state.online.roomCode;
+    if (!roomCode) return;
+
+    navigator.clipboard.writeText(roomCode).then(() => {
+      const fb = document.getElementById("hostCopyFeedback");
+      if (fb) {
+        fb.style.display = "block";
+        setTimeout(() => fb.style.display = "none", 3000);
+      }
+    }).catch(() => {
+      prompt("Copy your room code:", roomCode);
+    });
+  }
+
+  async updateHostSettingsInFirebase() {
+    if (!this.state.online.isOnline || this.state.online.role !== "player1") return;
+    const roomCode = this.state.online.roomCode;
+    if (!roomCode) return;
+
+    const settings = {
+      startingBudget: this.state.startingBudget,
+      formationKey: this.state.formationKey,
+      selectedLeague: this.state.selectedLeague,
+      timerDuration: this.state.timerDuration,
+      timerEnabled: this.state.timerEnabled
+    };
+
+    await firebaseMultiplayer.updateSettings(roomCode, settings);
+  }
+
+  async startOnlineAuctionFromHost() {
+    if (!this.state.online.isOnline || this.state.online.role !== "player1") return;
+    const roomCode = this.state.online.roomCode;
+    if (!roomCode) return;
+
+    sound.init();
+    sound.playWhistle();
+
+    // Generate round 1 candidate
+    const slot = this.getCurrentSlotInfo();
+    const candidate = getAuctionCandidate(slot.position, this.state.selectedLeague, this.state.usedPlayerIds);
+    this.state.currentAuctionPlayer = candidate;
+    this.state.usedPlayerIds = [candidate.id];
+
+    const baseBid = Math.max(5, Math.round(candidate.value * 0.25));
+
+    await firebaseMultiplayer.startOnlineAuction(roomCode, candidate, baseBid);
+  }
+
+  subscribeToOnlineRoom(roomCode) {
+    if (this.state.online.unsubRoomListener) {
+      this.state.online.unsubRoomListener();
+    }
+
+    this.state.online.unsubRoomListener = firebaseMultiplayer.subscribeToRoom(roomCode, (roomData) => {
+      this.handleOnlineRoomSnapshot(roomData);
+    });
+  }
+
+  handleOnlineRoomSnapshot(roomData) {
+    if (!roomData) return;
+    this.state.online.roomData = roomData;
+
+    const role = this.state.online.role;
+    const status = roomData.status;
+
+    // Synchronize player names and connection status
+    if (roomData.players) {
+      if (roomData.players.player1) {
+        this.state.player1.name = roomData.players.player1.name || "Player 1";
+      }
+      if (roomData.players.player2) {
+        this.state.player2.name = roomData.players.player2.name || "Player 2";
+      }
+
+      // Check opponent disconnect
+      const opponentKey = role === "player1" ? "player2" : "player1";
+      const opponentData = roomData.players[opponentKey];
+      if (opponentData && status !== "waiting") {
+        if (opponentData.connected === false && this.state.online.opponentConnected) {
+          this.handleOpponentDisconnect();
+        } else if (opponentData.connected === true && !this.state.online.opponentConnected) {
+          this.handleOpponentReconnect();
+        }
+      }
+    }
+
+    // Synchronize settings (Host -> Guest)
+    if (roomData.settings) {
+      this.state.startingBudget = roomData.settings.startingBudget || 200;
+      this.state.formationKey = roomData.settings.formationKey || "4-3-3";
+      this.state.selectedLeague = roomData.settings.selectedLeague || "ALL LEAGUES";
+      this.state.timerDuration = roomData.settings.timerDuration || 10;
+      this.state.timerEnabled = roomData.settings.timerEnabled !== false;
+
+      // Update Guest lobby preview items
+      const pBudget = document.getElementById("previewBudgetVal");
+      const pLeague = document.getElementById("previewLeagueVal");
+      const pForm = document.getElementById("previewFormationVal");
+      const pTimer = document.getElementById("previewTimerVal");
+      if (pBudget) pBudget.textContent = `€${this.state.startingBudget}M`;
+      if (pLeague) pLeague.textContent = this.state.selectedLeague;
+      if (pForm) pForm.textContent = this.state.formationKey;
+      if (pTimer) pTimer.textContent = this.state.timerEnabled ? `${this.state.timerDuration}s` : "OFF";
+    }
+
+    // 1. Status: WAITING IN LOBBY
+    if (status === "waiting") {
+      const p2Present = !!(roomData.players && roomData.players.player2 && roomData.players.player2.joined);
+      if (role === "player1") {
+        const hostP2Card = document.getElementById("hostP2StatusCard");
+        const hostP2Name = document.getElementById("hostP2NameDisplay");
+        const hostP2Tag = document.getElementById("hostP2StatusTag");
+        const startBtn = document.getElementById("btnStartOnlineAuction");
+
+        if (p2Present) {
+          if (hostP2Card) {
+            hostP2Card.className = "connected-player-card p2-connected";
+          }
+          if (hostP2Name) hostP2Name.textContent = `${roomData.players.player2.name} (Player 2)`;
+          if (hostP2Tag) {
+            hostP2Tag.className = "status-tag tag-ready";
+            hostP2Tag.textContent = "🟢 CONNECTED & READY";
+          }
+          if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.style.opacity = "1";
+            startBtn.textContent = "START ONLINE AUCTION ⚡";
+          }
+        } else {
+          if (hostP2Card) hostP2Card.className = "connected-player-card p2-waiting";
+          if (hostP2Name) hostP2Name.textContent = "Waiting for opponent...";
+          if (hostP2Tag) {
+            hostP2Tag.className = "status-tag tag-waiting";
+            hostP2Tag.textContent = "⏳ SHARE CODE TO CONNECT";
+          }
+          if (startBtn) {
+            startBtn.disabled = true;
+            startBtn.style.opacity = "0.5";
+            startBtn.textContent = "⏳ WAITING FOR OPPONENT...";
+          }
+        }
+      } else if (role === "player2") {
+        const guestP1Name = document.getElementById("guestP1NameDisplay");
+        if (guestP1Name && roomData.players && roomData.players.player1) {
+          guestP1Name.textContent = `${roomData.players.player1.name} (Host)`;
+        }
+      }
+    }
+
+    // 2. Status: ACTIVE AUCTION ROUND
+    else if (status === "auction") {
+      this.handleOnlineAuctionSync(roomData);
+    }
+
+    // 3. Status: SQUAD REVIEW
+    else if (status === "review") {
+      this.handleOnlineSquadReviewSync(roomData);
+    }
+
+    // 4. Status: MATCH DAY SIMULATION
+    else if (status === "match") {
+      this.handleOnlineMatchSync(roomData);
+    }
+  }
+
+  handleOnlineAuctionSync(roomData) {
+    const gameState = roomData.gameState;
+    if (!gameState) return;
+
+    // Switch screen to auction if not already
+    if (this.state.screen !== "auction") {
+      this.state.screen = "auction";
+      this.showScreen("auctionScreen");
+    }
+
+    // Sync budgets & squads
+    if (gameState.player1) {
+      this.state.player1.budget = gameState.player1.budget;
+      this.state.player1.squad = gameState.player1.squad || [];
+    }
+    if (gameState.player2) {
+      this.state.player2.budget = gameState.player2.budget;
+      this.state.player2.squad = gameState.player2.squad || [];
+    }
+
+    this.state.currentRound = gameState.currentRound || 1;
+    this.state.currentAuctionPlayer = gameState.currentAuctionPlayer;
+    this.state.currentBid = gameState.currentBid;
+    this.state.highestBidder = gameState.highestBidder;
+    this.state.currentTurn = gameState.currentTurn;
+    this.state.bidHistory = gameState.bidHistory || [];
+    this.state.usedPlayerIds = gameState.usedPlayerIds || [];
+
+    const slot = this.getCurrentSlotInfo();
+    this.updateRoundBanner(slot, this.state.currentAuctionPlayer);
+    this.renderAuctionCard(this.state.currentAuctionPlayer);
+    this.updateTurnDisplay();
+    this.updateBiddingUI();
+    this.renderTeamSidebars();
+    this.renderBidHistory();
+
+    // Check if round just finished with a Lucky Draw
+    if (gameState.roundPhase === "resolved" && gameState.roundResult) {
+      const res = gameState.roundResult;
+      const roundKey = `${gameState.currentRound}_resolved`;
+      if (this.state.online.lastProcessedPhase !== roundKey) {
+        this.state.online.lastProcessedPhase = roundKey;
+        this.showOnlineLuckyDrawModal(res);
+      }
+    } else if (gameState.roundPhase === "bidding") {
+      this.state.online.lastProcessedPhase = `${gameState.currentRound}_bidding`;
+      // Reset timer countdown
+      if (this.state.timerEnabled && gameState.timerRemaining !== undefined) {
+        this.state.timerRemaining = gameState.timerRemaining;
+        this.updateTimerDisplay();
+      }
+    }
+  }
+
+  showOnlineLuckyDrawModal(res) {
+    const winner = this.state[res.winnerId];
+    const loser = this.state[res.loserId];
+    this.showLuckyDrawModal(winner, loser, res.auctionPlayer, res.freePlayer, res.finalPrice);
+  }
+
+  handleOnlineSquadReviewSync(roomData) {
+    if (this.state.screen !== "review") {
+      this.state.screen = "review";
+      this.showScreen("squadReviewScreen");
+      this.renderSquadReview();
+    }
+
+    // Sync tactics
+    if (roomData.tactics) {
+      if (roomData.tactics.t1Tactic) this.state.t1Tactic = roomData.tactics.t1Tactic;
+      if (roomData.tactics.t2Tactic) this.state.t2Tactic = roomData.tactics.t2Tactic;
+      this.updateTacticalBadgesAndLabels();
+    }
+  }
+
+  handleOnlineMatchSync(roomData) {
+    if (this.state.screen !== "match") {
+      this.state.screen = "match";
+      this.showScreen("matchDayScreen");
+      
+      const matchState = roomData.matchState;
+      if (matchState && matchState.simulation) {
+        this.startMatchSimulationWithData(matchState.simulation);
+      }
+    }
+  }
+
+  handleOpponentDisconnect() {
+    this.state.online.opponentConnected = false;
+    this.openModal("disconnectOverlayModal");
+
+    const statusMsg = document.getElementById("disconnectStatusMessage");
+    const timerSec = document.getElementById("disconnectTimerSec");
+    if (statusMsg) {
+      const oppName = this.state.online.role === "player1" ? this.state.player2.name : this.state.player1.name;
+      statusMsg.textContent = `${oppName} has lost connection. Waiting 30 seconds for reconnection...`;
+    }
+
+    this.state.online.disconnectCountdown = 30;
+    if (this.state.online.disconnectInterval) clearInterval(this.state.online.disconnectInterval);
+
+    this.state.online.disconnectInterval = setInterval(() => {
+      this.state.online.disconnectCountdown--;
+      if (timerSec) timerSec.textContent = `${this.state.online.disconnectCountdown}s`;
+      if (this.state.online.disconnectCountdown <= 0) {
+        clearInterval(this.state.online.disconnectInterval);
+        this.state.online.disconnectInterval = null;
+        if (statusMsg) {
+          statusMsg.textContent = "Reconnection window expired. You may claim victory!";
+        }
+      }
+    }, 1000);
+  }
+
+  handleOpponentReconnect() {
+    this.state.online.opponentConnected = true;
+    if (this.state.online.disconnectInterval) {
+      clearInterval(this.state.online.disconnectInterval);
+      this.state.online.disconnectInterval = null;
+    }
+    this.closeModal("disconnectOverlayModal");
+  }
+
+  claimForfeitVictory() {
+    this.closeModal("disconnectOverlayModal");
+    const myRole = this.state.online.role;
+    const winner = this.state[myRole];
+    const loser = this.state[myRole === "player1" ? "player2" : "player1"];
+    this.showVictoryScreen(winner, loser, 3, 0);
+  }
+
+  leaveOnlineRoom() {
+    if (this.state.online.unsubRoomListener) {
+      this.state.online.unsubRoomListener();
+      this.state.online.unsubRoomListener = null;
+    }
+    this.state.online.isOnline = false;
+    this.state.online.roomCode = null;
+    this.state.online.role = null;
+    this.state.online.roomData = null;
+    this.state.online.opponentConnected = true;
+
+    const headerOnlinePill = document.getElementById("headerOnlinePill");
+    if (headerOnlinePill) headerOnlinePill.style.display = "none";
   }
 
   startGame() {
@@ -546,13 +1297,22 @@ export class MazadGame {
 
     const isTurnActive = isMyTurn && !isTransitioning && !this.state.isPaused && !hasPassed;
 
+    const isOnline = this.state.mode === "online";
+    const isMyOnlineRole = isOnline ? (this.state.online.role === playerId) : true;
+
     let turnTag = "";
     if (hasPassed) {
       turnTag = `<span style="color:#ef4444;font-size:0.75rem;font-weight:700;">(PASSED)</span>`;
     } else if (isMyTurn) {
-      turnTag = isAI
-        ? `<span style="color:var(--p2-bright);font-size:0.75rem;font-weight:700;">(AI ACTING...)</span>`
-        : `<span style="color:${isP1 ? 'var(--p1-bright)' : 'var(--p2-bright)'};font-size:0.75rem;font-weight:700;">(TURN)</span>`;
+      if (isAI) {
+        turnTag = `<span style="color:var(--p2-bright);font-size:0.75rem;font-weight:700;">(AI ACTING...)</span>`;
+      } else if (isOnline) {
+        turnTag = isMyOnlineRole
+          ? `<span style="color:var(--green-bright);font-size:0.75rem;font-weight:700;">(YOUR TURN ⚡)</span>`
+          : `<span style="color:#fbbf24;font-size:0.75rem;font-weight:700;">(OPPONENT'S TURN...)</span>`;
+      } else {
+        turnTag = `<span style="color:${isP1 ? 'var(--p1-bright)' : 'var(--p2-bright)'};font-size:0.75rem;font-weight:700;">(TURN)</span>`;
+      }
     } else {
       turnTag = `<span style="color:var(--text-dim);font-size:0.75rem;font-weight:600;">(WAITING)</span>`;
     }
@@ -569,7 +1329,7 @@ export class MazadGame {
     increments.forEach(inc => {
       const targetBid = currentBid + inc;
       const canAfford = targetBid <= budget;
-      const disabled = !isTurnActive || !canAfford || (isAI && isMyTurn);
+      const disabled = !isTurnActive || !canAfford || (isAI && isMyTurn) || (isOnline && !isMyOnlineRole);
       html += `
         <button class="bid-btn" data-player="${playerId}" data-amount="${inc}" ${disabled ? "disabled" : ""}>
           +€${inc}M
@@ -578,7 +1338,7 @@ export class MazadGame {
     });
 
     // ALL IN Button
-    const canAllIn = isTurnActive && budget > currentBid && !(isAI && isMyTurn);
+    const canAllIn = isTurnActive && budget > currentBid && !(isAI && isMyTurn) && (!isOnline || isMyOnlineRole);
     html += `
       <button class="bid-btn all-in" data-player="${playerId}" data-action="all-in" ${!canAllIn ? "disabled" : ""}>
         🔥 ALL IN (€${budget}M)
@@ -586,7 +1346,7 @@ export class MazadGame {
     `;
 
     // PASS Button
-    const canPass = isTurnActive && !hasPassed && !(isAI && isMyTurn);
+    const canPass = isTurnActive && !hasPassed && !(isAI && isMyTurn) && (!isOnline || isMyOnlineRole);
     html += `
       <button class="bid-btn pass-btn" data-player="${playerId}" data-action="pass" ${!canPass ? "disabled" : ""}>
         ${hasPassed ? "PASSED" : "PASS (TRIGGER DRAW)"}
@@ -599,6 +1359,7 @@ export class MazadGame {
     container.querySelectorAll(".bid-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         if (this.state.isTransitioning || this.state.isPaused || !isTurnActive) return;
+        if (isOnline && !isMyOnlineRole) return;
 
         const action = btn.dataset.action;
         const amount = parseInt(btn.dataset.amount, 10);
@@ -616,13 +1377,22 @@ export class MazadGame {
   /**
    * Handles an active bid by either Player 1 or Player 2
    */
-  handleBid(playerId, newBidAmount) {
+  async handleBid(playerId, newBidAmount) {
     if (this.state.isPaused) return;
 
     const bidder = this.state[playerId];
     if (newBidAmount <= this.state.currentBid) return;
     if (newBidAmount > bidder.budget) {
       this.showBudgetWarning();
+      return;
+    }
+
+    if (this.state.mode === "online") {
+      const roomCode = this.state.online.roomCode;
+      if (roomCode) {
+        sound.playBid();
+        await firebaseMultiplayer.submitBid(roomCode, playerId, newBidAmount, bidder.name);
+      }
       return;
     }
 
@@ -656,10 +1426,24 @@ export class MazadGame {
    * Handles a Pass action.
    * If a competitor passes, the other player immediately wins the auction!
    */
-  handlePass(playerId) {
+  async handlePass(playerId) {
     if (this.state.isPaused) return;
 
     sound.playClick();
+
+    if (this.state.mode === "online") {
+      const roomCode = this.state.online.roomCode;
+      if (roomCode) {
+        const slot = this.getCurrentSlotInfo();
+        const rawFree = getRandomFreePlayer(slot.position, this.state.selectedLeague, this.state.usedPlayerIds);
+        const freePlayer = (rawFree && rawFree.player && rawFree.player.name)
+          ? { ...rawFree.player, ...rawFree }
+          : (rawFree || {});
+
+        await firebaseMultiplayer.submitPass(roomCode, playerId, freePlayer);
+      }
+      return;
+    }
 
     const passer = this.state[playerId];
     this.state.bidHistory.unshift({
@@ -1060,6 +1844,22 @@ export class MazadGame {
         console.error("renderTeamSidebars error:", err);
       }
 
+      if (this.state.mode === "online") {
+        if (this.state.online.role === "player1") {
+          const nextRound = (this.state.currentRound || 1) + 1;
+          if (this.state.currentRound >= 11) {
+            firebaseMultiplayer.startOnlineSquadReview(this.state.online.roomCode);
+          } else {
+            const formation = FORMATIONS[this.state.formationKey] || FORMATIONS["4-3-3"];
+            const slot = formation.slots[nextRound - 1] || formation.slots[0];
+            const candidate = getAuctionCandidate(slot.position, this.state.selectedLeague, this.state.usedPlayerIds);
+            const baseBid = Math.max(5, Math.round(candidate.value * 0.25));
+            firebaseMultiplayer.advanceOnlineRound(this.state.online.roomCode, nextRound, candidate, baseBid);
+          }
+        }
+        return;
+      }
+
       if (this.state.currentRound >= 11) {
         // Squads completed! Move to squad review screen
         this.showSquadReview();
@@ -1201,35 +2001,81 @@ export class MazadGame {
     if (rT1Title) rT1Title.textContent = `🟢 ${t1.name} Starting Tactics:`;
     if (rT2Title) rT2Title.textContent = `🔵 ${t2.name} Starting Tactics:`;
 
+    const isOnline = this.state.mode === "online";
+    const myRole = isOnline ? this.state.online.role : null;
+
     // Player 1 Review Tactics Buttons
     document.querySelectorAll(".p1-review-chip").forEach(chip => {
+      const disabled = isOnline && myRole !== "player1";
       chip.classList.toggle("active", chip.dataset.tactic === this.state.t1Tactic);
+      chip.style.opacity = disabled ? "0.4" : "1";
+      chip.style.pointerEvents = disabled ? "none" : "auto";
       chip.onclick = () => {
+        if (disabled) return;
         document.querySelectorAll(".p1-review-chip").forEach(c => c.classList.remove("active"));
         chip.classList.add("active");
         this.state.t1Tactic = chip.dataset.tactic;
         sound.playClick();
+        if (isOnline) {
+          firebaseMultiplayer.updateTactics(this.state.online.roomCode, {
+            t1Tactic: this.state.t1Tactic,
+            t2Tactic: this.state.t2Tactic
+          });
+        }
       };
     });
 
     // Player 2 Review Tactics Buttons
     document.querySelectorAll(".p2-review-chip").forEach(chip => {
+      const disabled = isOnline && myRole !== "player2";
       chip.classList.toggle("active", chip.dataset.tactic === this.state.t2Tactic);
+      chip.style.opacity = disabled ? "0.4" : "1";
+      chip.style.pointerEvents = disabled ? "none" : "auto";
       chip.onclick = () => {
+        if (disabled) return;
         document.querySelectorAll(".p2-review-chip").forEach(c => c.classList.remove("active"));
         chip.classList.add("active");
         this.state.t2Tactic = chip.dataset.tactic;
         sound.playClick();
+        if (isOnline) {
+          firebaseMultiplayer.updateTactics(this.state.online.roomCode, {
+            t1Tactic: this.state.t1Tactic,
+            t2Tactic: this.state.t2Tactic
+          });
+        }
       };
     });
 
     const proceedBtn = document.getElementById("proceedToMatchBtn");
     if (proceedBtn) {
-      proceedBtn.onclick = () => this.startMatchSimulation();
+      if (isOnline && myRole === "player2") {
+        proceedBtn.disabled = true;
+        proceedBtn.textContent = "⏳ WAITING FOR HOST TO START MATCH...";
+        proceedBtn.style.opacity = "0.6";
+      } else {
+        proceedBtn.disabled = false;
+        proceedBtn.textContent = "PROCEED TO MATCH DAY ⚽";
+        proceedBtn.style.opacity = "1";
+        proceedBtn.onclick = () => {
+          if (isOnline && myRole === "player1") {
+            const sim = generateMatchSimulation(this.state.player1, this.state.player2, {
+              t1Tactic: this.state.t1Tactic,
+              t2Tactic: this.state.t2Tactic
+            });
+            firebaseMultiplayer.startOnlineMatchSimulation(this.state.online.roomCode, sim);
+          } else {
+            this.startMatchSimulation();
+          }
+        };
+      }
     }
   }
 
-  startMatchSimulation() {
+  startMatchSimulationWithData(simData) {
+    this.startMatchSimulation(simData);
+  }
+
+  startMatchSimulation(preGeneratedSim = null) {
     this.showScreen("matchDayScreen");
     sound.playWhistle();
 
@@ -1252,7 +2098,7 @@ export class MazadGame {
     this.updateTacticalBadgesAndLabels();
 
     // Prepare simulation
-    this.state.matchSim = generateMatchSimulation(this.state.player1, this.state.player2, {
+    this.state.matchSim = preGeneratedSim || generateMatchSimulation(this.state.player1, this.state.player2, {
       t1Tactic: this.state.t1Tactic,
       t2Tactic: this.state.t2Tactic
     });
